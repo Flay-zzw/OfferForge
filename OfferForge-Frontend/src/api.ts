@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question } from './types';
+import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeRequest, ResumeAnalyzeResponse } from './types';
 
 const API_BASE = '/api';
 
@@ -36,6 +36,12 @@ export const api = {
 
   chat: (data: ChatRequest) =>
     fetchAPI<ChatResponse>('/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  analyzeResume: (data: ResumeAnalyzeRequest) =>
+    fetchAPI<ResumeAnalyzeResponse>('/resume/analyze', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

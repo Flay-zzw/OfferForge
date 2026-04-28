@@ -30,3 +30,20 @@ export interface ParsedQuestion {
 export interface InterviewParseResponse {
   questions: ParsedQuestion[];
 }
+
+export interface ResumeAnalyzeRequest {
+  resume_content: string;
+  target_position?: string;
+}
+
+export interface PredictedQuestion {
+  question: string;
+  difficulty: string;
+  category: string;
+  reason: string;
+}
+
+export interface ResumeAnalyzeResponse {
+  predicted_questions: PredictedQuestion[];
+  overall_analysis: string;
+}

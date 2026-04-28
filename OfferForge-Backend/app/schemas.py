@@ -48,3 +48,20 @@ class ChatMessage(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+
+
+class ResumeAnalyzeRequest(BaseModel):
+    resume_content: str
+    target_position: str = ""
+
+
+class PredictedQuestion(BaseModel):
+    question: str
+    difficulty: str
+    category: str
+    reason: str
+
+
+class ResumeAnalyzeResponse(BaseModel):
+    predicted_questions: list[PredictedQuestion]
+    overall_analysis: str

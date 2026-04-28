@@ -1,11 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Search,
-  Plus,
   Loader2,
   Building2,
   Signal,
-  X,
   ChevronRight,
 } from 'lucide-react';
 import { api } from '../api';
@@ -18,10 +15,8 @@ export default function QuestionsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filterCompany, setFilterCompany] = useState('');
   const [filterDifficulty, setFilterDifficulty] = useState('');
-  const [showParseModal, setShowParseModal] = useState(false);
-  const [parseContent, setParseContent] = useState('');
-  const [parseCompany, setParseCompany] = useState('');
-  const [parsing, setParsing] = useState(false);
+
+  const companies = [...new Set(questions.filter(q => q.company).map(q => q.company))].sort();
 
   const fetchQuestions = useCallback(async () => {
     try {
@@ -41,27 +36,6 @@ export default function QuestionsPage() {
   useEffect(() => {
     fetchQuestions();
   }, [fetchQuestions]);
-
-  const handleParse = async () => {
-    if (!parseContent.trim()) return;
-    setParsing(true);
-    try {
-      const result = await api.parseInterview({
-        content: parseContent,
-        company: parseCompany,
-      });
-      if (result.questions.length > 0) {
-        await fetchQuestions();
-        setShowParseModal(false);
-        setParseContent('');
-        setParseCompany('');
-      }
-    } catch (err) {
-      console.error('Failed to parse interview:', err);
-    } finally {
-      setParsing(false);
-    }
-  };
 
   const handleDelete = async (id: number) => {
     try {
@@ -101,37 +75,27 @@ export default function QuestionsPage() {
     <div style={styles.container}>
       <div style={styles.layout}>
         <aside style={styles.sidebar}>
-          <div style={styles.toolbar}>
-            <div style={styles.filters}>
-              <div style={styles.searchBox}>
-                <Search size={15} style={{ flexShrink: 0 }} color="var(--text-tertiary)" />
-                <input
-                  style={styles.searchInput}
-                  placeholder="搜索公司..."
-                  value={filterCompany}
-                  onChange={(e) => setFilterCompany(e.target.value)}
-                />
-                {filterCompany && (
-                  <button style={styles.clearFilter} onClick={() => setFilterCompany('')}>
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-              <select
-                style={styles.select}
-                value={filterDifficulty}
-                onChange={(e) => setFilterDifficulty(e.target.value)}
-              >
-                <option value="">全部</option>
-                <option value="简单">简单</option>
-                <option value="中等">中等</option>
-                <option value="困难">困难</option>
-              </select>
-            </div>
-            <button style={styles.addBtn} onClick={() => setShowParseModal(true)}>
-              <Plus size={16} />
-              <span>解析面经</span>
-            </button>
+          <div style={styles.filters}>
+            <select
+              style={styles.select}
+              value={filterCompany}
+              onChange={(e) => setFilterCompany(e.target.value)}
+            >
+              <option value="">全部公司</option>
+              {companies.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <select
+              style={styles.select}
+              value={filterDifficulty}
+              onChange={(e) => setFilterDifficulty(e.target.value)}
+            >
+              <option value="">全部难度</option>
+              <option value="简单">简单</option>
+              <option value="中等">中等</option>
+              <option value="困难">困难</option>
+            </select>
           </div>
 
           <div style={styles.listArea}>
@@ -205,62 +169,6 @@ export default function QuestionsPage() {
         </main>
       </div>
 
-      {showParseModal && (
-        <div style={styles.modalOverlay} onClick={() => setShowParseModal(false)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>解析面经</h3>
-              <button style={styles.modalClose} onClick={() => setShowParseModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div style={styles.modalBody}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>公司名称（可选）</label>
-                <input
-                  style={styles.formInput}
-                  placeholder="例如：字节跳动"
-                  value={parseCompany}
-                  onChange={(e) => setParseCompany(e.target.value)}
-                />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>面经内容</label>
-                <textarea
-                  style={styles.formTextarea}
-                  placeholder="粘贴面试经历，AI 会自动拆分为独立题目并生成参考答案..."
-                  value={parseContent}
-                  onChange={(e) => setParseContent(e.target.value)}
-                  rows={10}
-                />
-              </div>
-            </div>
-            <div style={styles.modalFooter}>
-              <button style={styles.cancelBtn} onClick={() => setShowParseModal(false)}>
-                取消
-              </button>
-              <button
-                style={{
-                  ...styles.parseBtn,
-                  ...(parseContent.trim() && !parsing ? {} : { opacity: 0.5 }),
-                }}
-                onClick={handleParse}
-                disabled={!parseContent.trim() || parsing}
-              >
-                {parsing ? (
-                  <>
-                    <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                    解析中...
-                  </>
-                ) : (
-                  '开始解析'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -290,81 +198,32 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     background: 'var(--bg-card)',
     borderRight: '1px solid var(--border-primary)',
-  },
-  toolbar: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-    padding: '14px 14px 10px',
-    borderBottom: '1px solid var(--border-primary)',
+    padding: '14px 14px',
+    gap: 12,
   },
   filters: {
     display: 'flex',
     gap: 8,
     alignItems: 'center',
   },
-  searchBox: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '7px 10px',
-    border: '1px solid var(--border-primary)',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--bg-input)',
-    flex: 1,
-    minWidth: 0,
-  },
-  searchInput: {
-    border: 'none',
-    outline: 'none',
-    background: 'transparent',
-    color: 'var(--text-primary)',
-    fontSize: 13,
-    width: '100%',
-  },
-  clearFilter: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: 'none',
-    background: 'transparent',
-    color: 'var(--text-tertiary)',
-    cursor: 'pointer',
-    padding: 2,
-  },
   select: {
-    padding: '7px 10px',
+    padding: '8px 12px',
     border: '1px solid var(--border-primary)',
-    borderRadius: 'var(--radius-md)',
+    borderRadius: '10px',
     background: 'var(--bg-input)',
     color: 'var(--text-primary)',
     fontSize: 13,
     outline: 'none',
     cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  },
-  addBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    padding: '8px 14px',
-    border: 'none',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--accent-primary)',
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: 'pointer',
-    transition: 'all var(--transition-fast)',
     whiteSpace: 'nowrap',
   },
   listArea: {
     flex: 1,
     overflowY: 'auto',
-    padding: '8px 8px',
+    padding: '4px 0',
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 6,
   },
   loadingState: {
     display: 'flex',
@@ -392,54 +251,62 @@ const styles: Record<string, React.CSSProperties> = {
   listItem: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 6,
-    padding: '10px 12px',
-    border: 'none',
-    borderRadius: 'var(--radius-md)',
-    background: 'transparent',
+    gap: 10,
+    padding: '14px 16px',
+    border: '1px solid var(--border-primary)',
+    borderRadius: '14px',
+    background: 'var(--bg-card)',
     cursor: 'pointer',
     transition: 'all var(--transition-fast)',
     textAlign: 'left',
     width: '100%',
+    marginBottom: 6,
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
   },
   listItemSelected: {
     background: 'var(--accent-primary-light)',
+    borderColor: 'var(--accent-primary)',
+    boxShadow: '0 4px 12px rgba(99, 102, 241, 0.15)',
   },
   listItemTop: {
     display: 'flex',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 10,
   },
   difficultyBadge: {
-    padding: '2px 8px',
-    borderRadius: 'var(--radius-xl)',
-    fontSize: 11,
-    fontWeight: 500,
+    padding: '4px 10px',
+    borderRadius: '8px',
+    fontSize: 12,
+    fontWeight: 600,
     whiteSpace: 'nowrap',
     flexShrink: 0,
   },
   listItemQuestion: {
-    fontSize: 13,
+    fontSize: 14,
     color: 'var(--text-primary)',
-    fontWeight: 500,
+    fontWeight: 600,
+    lineHeight: 1.5,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
   },
   listItemBottom: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
+    marginTop: 6,
   },
   companyBadge: {
     display: 'flex',
     alignItems: 'center',
-    gap: 3,
-    padding: '2px 8px',
-    borderRadius: 'var(--radius-xl)',
-    background: 'var(--accent-primary-light)',
+    gap: 4,
+    padding: '4px 10px',
+    borderRadius: '8px',
+    background: 'linear-gradient(135deg, var(--accent-primary-light) 0%, rgba(139, 92, 246, 0.1) 100%)',
     color: 'var(--accent-primary)',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 500,
     whiteSpace: 'nowrap',
   },
@@ -460,118 +327,5 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-  },
-  modalOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0, 0, 0, 0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-    backdropFilter: 'blur(4px)',
-  },
-  modal: {
-    background: 'var(--bg-card)',
-    borderRadius: 'var(--radius-xl)',
-    width: '90%',
-    maxWidth: 600,
-    maxHeight: '85vh',
-    display: 'flex',
-    flexDirection: 'column',
-    boxShadow: 'var(--shadow-xl)',
-  },
-  modalHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '20px 24px 16px',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 600,
-    color: 'var(--text-primary)',
-  },
-  modalClose: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 32,
-    height: 32,
-    border: 'none',
-    borderRadius: 'var(--radius-sm)',
-    background: 'transparent',
-    color: 'var(--text-tertiary)',
-    cursor: 'pointer',
-    transition: 'all var(--transition-fast)',
-  },
-  modalBody: {
-    padding: '0 24px',
-    overflowY: 'auto',
-    flex: 1,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    display: 'block',
-    fontSize: 13,
-    fontWeight: 500,
-    color: 'var(--text-secondary)',
-    marginBottom: 6,
-  },
-  formInput: {
-    width: '100%',
-    padding: '10px 14px',
-    border: '1px solid var(--border-primary)',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--bg-input)',
-    color: 'var(--text-primary)',
-    fontSize: 14,
-    outline: 'none',
-    transition: 'border-color var(--transition-fast)',
-  },
-  formTextarea: {
-    width: '100%',
-    padding: '12px 14px',
-    border: '1px solid var(--border-primary)',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--bg-input)',
-    color: 'var(--text-primary)',
-    fontSize: 14,
-    outline: 'none',
-    resize: 'vertical',
-    lineHeight: 1.6,
-    transition: 'border-color var(--transition-fast)',
-  },
-  modalFooter: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: 10,
-    padding: '16px 24px 20px',
-  },
-  cancelBtn: {
-    padding: '8px 20px',
-    border: '1px solid var(--border-primary)',
-    borderRadius: 'var(--radius-md)',
-    background: 'transparent',
-    color: 'var(--text-secondary)',
-    fontSize: 14,
-    cursor: 'pointer',
-    transition: 'all var(--transition-fast)',
-  },
-  parseBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '8px 24px',
-    border: 'none',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--accent-primary)',
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 500,
-    cursor: 'pointer',
-    transition: 'all var(--transition-fast)',
   },
 };

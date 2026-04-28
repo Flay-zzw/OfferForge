@@ -1,10 +1,10 @@
-import { MessageSquare, BookOpen, Sun, Moon, Flame } from 'lucide-react';
+import { MessageSquare, BookOpen, Sun, Moon, Flame, FileText, Briefcase } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import type { ReactNode } from 'react';
 
 interface LayoutProps {
-  activeTab: 'chat' | 'questions';
-  onTabChange: (tab: 'chat' | 'questions') => void;
+  activeTab: 'chat' | 'questions' | 'parse' | 'mock-interview';
+  onTabChange: (tab: 'chat' | 'questions' | 'parse' | 'mock-interview') => void;
   children: ReactNode;
 }
 
@@ -39,6 +39,26 @@ export default function Layout({ activeTab, onTabChange, children }: LayoutProps
           >
             <BookOpen size={16} />
             <span>题库</span>
+          </button>
+          <button
+            style={{
+              ...styles.tab,
+              ...(activeTab === 'parse' ? styles.tabActive : {}),
+            }}
+            onClick={() => onTabChange('parse')}
+          >
+            <FileText size={16} />
+            <span>解析面经</span>
+          </button>
+          <button
+            style={{
+              ...styles.tab,
+              ...(activeTab === 'mock-interview' ? styles.tabActive : {}),
+            }}
+            onClick={() => onTabChange('mock-interview')}
+          >
+            <Briefcase size={16} />
+            <span>模拟面试</span>
           </button>
         </div>
         <div style={styles.headerRight}>
