@@ -1,28 +1,93 @@
-import { useState } from 'react';
-import { FileText, Loader2, Sparkles, Briefcase, AlertCircle, CheckCircle, Lightbulb, Tags } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Loader2, Sparkles, Briefcase, AlertCircle, CheckCircle, Lightbulb, Tags, Upload, FileText, X, Trash2, File, Image, FileSpreadsheet } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../api';
 
+const ACCEPTED_TYPES = '.pdf,.docx,.doc,.png,.jpg,.jpeg,.bmp,.tiff,.tif,.webp';
+const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileIcon({ filename }: { filename: string }) {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const iconProps = { size: 20, color: 'var(--accent-primary)' };
+  if (ext === 'pdf') return <FileText {...iconProps} />;
+  if (['doc', 'docx'].includes(ext || '')) return <FileSpreadsheet {...iconProps} />;
+  if (['png', 'jpg', 'jpeg', 'bmp', 'tiff', 'tif', 'webp'].includes(ext || '')) return <Image {...iconProps} />;
+  return <File {...iconProps} />;
+}
+
 export default function MockInterviewPage() {
   const [targetPosition, setTargetPosition] = useState('');
-  const [resumeContent, setResumeContent] = useState('');
+  const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<{
     predicted_questions: { question: string; difficulty: string; category: string; reason: string }[];
     overall_analysis: string;
   } | null>(null);
   const [error, setError] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const validateFile = useCallback((f: File): string | null => {
+    const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+    const allowed = ACCEPTED_TYPES.split(',');
+    if (!allowed.includes(ext)) return `不支持的格式: ${ext}，请上传 PDF / Word / 图片文件`;
+    if (f.size > MAX_SIZE) return `文件过大 (${formatSize(f.size)})，请上传小于 20MB 的文件`;
+    if (f.size === 0) return '文件为空';
+    return null;
+  }, []);
+
+  const handleFileSelect = useCallback((f: File) => {
+    const err = validateFile(f);
+    if (err) {
+      setError(err);
+      setFile(null);
+      return;
+    }
+    setError('');
+    setFile(f);
+    setResult(null);
+  }, [validateFile]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFileSelect(f);
+  }, [handleFileSelect]);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) handleFileSelect(f);
+  };
+
+  const removeFile = () => {
+    setFile(null);
+    setError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleAnalyze = async () => {
-    if (!resumeContent.trim()) return;
+    if (!file) return;
     setAnalyzing(true);
     setError('');
     setResult(null);
     try {
-      const data = await api.analyzeResume({
-        resume_content: resumeContent,
-        target_position: targetPosition || undefined,
-      });
+      const data = await api.analyzeResumeFile(file, targetPosition || undefined);
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : '分析失败，请重试');
@@ -51,7 +116,7 @@ export default function MockInterviewPage() {
           </div>
           <div>
             <h1 style={styles.title}>AI 模拟面试</h1>
-            <p style={styles.subtitle}>上传简历，AI 分析并预测面试官可能问到的问题</p>
+            <p style={styles.subtitle}>上传简历（PDF / Word / 图片），AI 自动分析并预测面试题</p>
           </div>
         </div>
 
@@ -71,53 +136,69 @@ export default function MockInterviewPage() {
               />
             </div>
 
+            {/* File Upload Zone */}
             <div style={styles.formGroup}>
               <label style={styles.label}>
-                <FileText size={14} />
-                简历内容
+                <Upload size={14} />
+                上传简历
               </label>
-              <textarea
-                style={styles.formTextarea}
-                placeholder={`粘贴你的简历内容...
 
-例如：
-教育背景：
-- 北京大学 计算机科学与技术 本科 2020-2024
-
-技能：
-- 熟练掌握 Java、Spring Boot、MySQL、Redis
-- 了解微服务架构、Docker、Kubernetes
-
-项目经历：
-1. 电商平台后端开发（2023.06-2023.12）
-   - 使用 Spring Cloud 实现微服务架构
-   - 设计并实现了订单、支付、库存等核心模块
-   - 使用 Redis 做缓存，QPS 提升 300%
-
-2. 即时通讯系统（2024.01-2024.06）
-   - 基于 WebSocket 实现实时消息推送
-   - 使用 Netty 处理高并发连接
-   - 消息可靠性送达率 99.99%
-
-AI 会分析你的简历，预测面试可能被问到的问题。`}
-                value={resumeContent}
-                onChange={(e) => setResumeContent(e.target.value)}
-                rows={14}
-              />
+              {!file ? (
+                <div
+                  style={{
+                    ...styles.dropZone,
+                    ...(dragOver ? styles.dropZoneActive : {}),
+                  }}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPTED_TYPES}
+                    onChange={handleInputChange}
+                    style={{ display: 'none' }}
+                  />
+                  <div style={styles.dropIcon}>
+                    <Upload size={32} color="var(--accent-primary)" />
+                  </div>
+                  <p style={styles.dropText}>
+                    拖拽文件到此处，或<span style={styles.dropLink}>点击选择</span>
+                  </p>
+                  <p style={styles.dropHint}>
+                    支持 PDF / Word / 图片格式，最大 20MB
+                  </p>
+                </div>
+              ) : (
+                <div style={styles.fileCard}>
+                  <div style={styles.fileIconBox}>
+                    <FileIcon filename={file.name} />
+                  </div>
+                  <div style={styles.fileInfo}>
+                    <p style={styles.fileName}>{file.name}</p>
+                    <p style={styles.fileSize}>{formatSize(file.size)}</p>
+                  </div>
+                  <button style={styles.removeBtn} onClick={removeFile} title="移除文件">
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
             </div>
 
             <button
               style={{
                 ...styles.analyzeBtn,
-                ...(resumeContent.trim() && !analyzing ? styles.analyzeBtnActive : {}),
+                ...(file && !analyzing ? styles.analyzeBtnActive : {}),
               }}
               onClick={handleAnalyze}
-              disabled={!resumeContent.trim() || analyzing}
+              disabled={!file || analyzing}
             >
               {analyzing ? (
                 <>
                   <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                  AI 分析中...
+                  AI 正在分析简历...
                 </>
               ) : (
                 <>
@@ -138,7 +219,6 @@ AI 会分析你的简历，预测面试可能被问到的问题。`}
           {/* Results Section */}
           {result && (
             <div style={styles.resultSection}>
-              {/* Overall Analysis */}
               <div style={styles.overallCard}>
                 <div style={styles.overallHeader}>
                   <CheckCircle size={20} color="var(--success)" />
@@ -155,7 +235,6 @@ AI 会分析你的简历，预测面试可能被问到的问题。`}
                 </div>
               </div>
 
-              {/* Predicted Questions */}
               <h3 style={styles.questionSectionTitle}>预测面试题</h3>
               <div style={styles.questionList}>
                 {result.predicted_questions.map((q, index) => {
@@ -165,13 +244,7 @@ AI 会分析你的简历，预测面试可能被问到的问题。`}
                       <div style={styles.questionNumber}>#{index + 1}</div>
                       <div style={styles.questionBody}>
                         <div style={styles.questionTop}>
-                          <span
-                            style={{
-                              ...styles.badge,
-                              background: dc.bg,
-                              color: dc.color,
-                            }}
-                          >
+                          <span style={{ ...styles.badge, background: dc.bg, color: dc.color }}>
                             {q.difficulty}
                           </span>
                           {q.category && (
@@ -290,18 +363,98 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
     transition: 'all var(--transition-fast)',
   },
-  formTextarea: {
-    width: '100%',
-    padding: '14px 16px',
-    border: '2px solid var(--border-primary)',
-    borderRadius: '12px',
+  dropZone: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: '48px 24px',
+    border: '2px dashed var(--border-primary)',
+    borderRadius: '16px',
     background: 'var(--bg-secondary)',
+    cursor: 'pointer',
+    transition: 'all var(--transition-fast)',
+  },
+  dropZoneActive: {
+    borderColor: 'var(--accent-primary)',
+    background: 'var(--accent-primary-light)',
+  },
+  dropIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: '50%',
+    background: 'var(--accent-primary-light)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropText: {
+    fontSize: 15,
     color: 'var(--text-primary)',
+    margin: 0,
+  },
+  dropLink: {
+    color: 'var(--accent-primary)',
+    fontWeight: 600,
+    textDecoration: 'underline',
+  },
+  dropHint: {
+    fontSize: 12,
+    color: 'var(--text-tertiary)',
+    margin: 0,
+  },
+  fileCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '14px 18px',
+    borderRadius: '14px',
+    border: '2px solid var(--accent-primary)',
+    background: 'var(--accent-primary-light)',
+  },
+  fileIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: '12px',
+    background: 'var(--bg-card)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid var(--border-primary)',
+    flexShrink: 0,
+  },
+  fileInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  fileName: {
     fontSize: 14,
-    outline: 'none',
-    resize: 'vertical',
-    lineHeight: 1.7,
-    minHeight: 250,
+    fontWeight: 600,
+    color: 'var(--text-primary)',
+    margin: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  fileSize: {
+    fontSize: 12,
+    color: 'var(--text-tertiary)',
+    margin: 0,
+    marginTop: 2,
+  },
+  removeBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: '8px',
+    border: 'none',
+    background: 'var(--bg-card)',
+    color: 'var(--text-tertiary)',
+    cursor: 'pointer',
+    flexShrink: 0,
     transition: 'all var(--transition-fast)',
   },
   analyzeBtn: {
@@ -340,8 +493,6 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     lineHeight: 1.5,
   },
-
-  // Results Section
   resultSection: {
     marginTop: 32,
   },

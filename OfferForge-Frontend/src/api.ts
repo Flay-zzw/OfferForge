@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeRequest, ResumeAnalyzeResponse } from './types';
+import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse } from './types';
 
 const API_BASE = '/api';
 
@@ -40,9 +40,15 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  analyzeResume: (data: ResumeAnalyzeRequest) =>
-    fetchAPI<ResumeAnalyzeResponse>('/resume/analyze', {
+  analyzeResumeFile: (file: File, targetPosition?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (targetPosition) formData.append('target_position', targetPosition);
+
+    return fetchAPI<ResumeAnalyzeResponse>('/resume/analyze', {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      body: formData,
+      headers: {},
+    });
+  },
 };
