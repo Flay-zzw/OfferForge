@@ -65,3 +65,41 @@ class PredictedQuestion(BaseModel):
 class ResumeAnalyzeResponse(BaseModel):
     predicted_questions: list[PredictedQuestion]
     overall_analysis: str
+
+
+# ---------- Mock Interview: Resume Extract ----------
+class ResumeExtractResponse(BaseModel):
+    resume_markdown: str
+    resume_raw: str
+
+
+# ---------- Mock Interview: Chat ----------
+class InterviewMessage(BaseModel):
+    role: str
+    content: str
+
+
+class InterviewChatRequest(BaseModel):
+    resume_text: str
+    conversation_history: list[InterviewMessage] = []
+    target_position: str = ""
+
+
+class InterviewChatResponse(BaseModel):
+    message: str
+    is_complete: bool = False
+
+
+# ---------- Mock Interview: Evaluate ----------
+class InterviewEvaluateRequest(BaseModel):
+    resume_text: str
+    conversation_history: list[InterviewMessage]
+    target_position: str = ""
+
+
+class InterviewEvaluateResponse(BaseModel):
+    overall_score: int
+    strengths: list[str]
+    weaknesses: list[str]
+    learning_path: list[str]
+    detailed_feedback: str

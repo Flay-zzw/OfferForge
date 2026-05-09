@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(python -m py_compile app/schemas.py)",
+      "Bash(python -m py_compile app/minimax.py)",
+      "Bash(python -m py_compile app/routers/mock_interview.py)"
+    ]
+  }
+}

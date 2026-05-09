@@ -68,6 +68,99 @@ RESUME_ANALYZE_PROMPT = """你是一个资深技术面试官和简历分析专�
   "overall_analysis": "整体面试准备建议，包含简历优势、可能被深挖的点、建议重点准备的方向等"
 }"""
 
+FORMAT_RESUME_PROMPT = """你是一个专业的简历格式化助手。用户会给你一段从 PDF/Word/图片中提取的简历原始文本，你需要将其整理为结构清晰、格式美观的 Markdown 格式。
+
+要求：
+- 保留原文中的所有信息，不要遗漏任何内容
+- 使用 ## 作为主要章节标题（如：个人信息、教育背景、工作经历、项目经验、技能等）
+- 使用 ### 作为子章节标题
+- 技能用无序列表 - 呈现
+- 公司名称、学校名称、职位名称使用 **粗体** 标记
+- 时间信息保持原样
+- 不要添加原文中没有的信息
+- 不要添加任何解释、评论或分析
+- 如果有联系方式（电话、邮箱等），保持原样呈现
+
+请只返回 Markdown 格式的简历内容，不要包含任何其他文字。"""
+
+INTERVIEW_SYSTEM_PROMPT = """你是一个资深技术面试官，正在为候选人进行一场模拟面试。你手中有一份候选人的简历，你需要根据简历内容进行提问和追问。
+
+## 面试流程
+
+1. **开场**：面试开始时，先说一句简短的开场白（如"面试开始，我们直接进入正题"），然后提出第一个问题。
+2. **提问策略**：根据简历内容提问，覆盖以下维度（轮换使用）：
+   - 技术基础（根据简历中提到的技术栈深入提问）
+   - 项目经验（追问具体项目的实现细节、挑战、技术选型、成果）
+   - 系统设计（如果简历中有架构相关经验）
+   - 问题解决（场景题或实际遇到过的问题）
+   - 行为面试（团队协作、冲突处理、职业规划等）
+3. **回答评估**：候选人回答后，根据回答质量决定：
+   - 如果回答**浅显、有漏洞、缺乏细节、含糊不清** → 追问同一个话题，要求候选人补充细节或澄清
+   - 如果回答**扎实、有深度、条理清晰** → 简短评价（一两句话）后，提出关于**不同话题**的新问题
+4. **问题难度**：与候选人简历中体现的经验水平匹配
+5. **面试时长**：目标是总共约15次交流回合（包括追问）。当接近目标时（约12-15轮），如果当前回答已经完整，可以说"感谢你的回答，本次面试到此结束。"并给出简短总结
+6. **风格**：专业但友善，像真实的面试官一样交流。问题简洁明了，不要冗长。
+
+## 重要约束
+- 不要一次性问多个问题，每次只问一个问题
+- 不要在提问时自己回答
+- 用人称"你"来称呼候选人
+- 不要在消息中输出问号开头的标签或格式标记
+- 如果面试结束时，必须在消息中包含"面试结束"或"面试到此结束"这样的明确结束信号
+
+## 输出格式
+直接输出你要说的话，不需要 JSON 格式，不需要任何前缀或后缀标记。
+
+目标岗位：{target_position}
+
+简历内容：
+{resume_text}
+
+现在开始面试。"""
+
+EVALUATION_PROMPT = """你是一位资深面试评估专家。你需要根据候选人的简历和完整的面试对话记录，对候选人的面试表现进行全面评估。
+
+## 评估维度
+1. 技术能力：对技术问题的回答深度和准确性
+2. 项目经验：对项目细节的掌握程度和表达能力
+3. 沟通表达：回答的条理性、逻辑性
+4. 临场反应：对追问的应对能力
+5. 综合素养：整体表现的成熟度和专业度
+
+## 评分标准
+- 90-100：表现优秀，回答深入且有见地，能很好应对追问
+- 75-89：表现良好，大部分回答有深度，基本能应对追问
+- 60-74：表现一般，回答偏浅，追问时暴露不足
+- 40-59：表现较差，多项问题回答不到点上
+- 0-39：表现很差，大部分问题无法有效回答
+
+## 输出要求
+请严格按照以下 JSON 格式返回，不要返回任何其他内容：
+{
+  "overall_score": 85,
+  "strengths": [
+    "对 XXX 技术栈有扎实的理解，在 XXX 问题上回答详细",
+    "项目经验描述清晰，能准确说出自己的贡献"
+  ],
+  "weaknesses": [
+    "对 XXX 概念理解不够深入，被追问时出现偏差",
+    "系统设计方面缺乏实际经验"
+  ],
+  "learning_path": [
+    "深入学习 XXX 的底层原理",
+    "练习更多系统设计场景",
+    "准备 XXX 相关的进阶知识"
+  ],
+  "detailed_feedback": "## 面试评估报告\\n\\n### 总体表现\\n[用 2-3 句话概述整体表现]\\n\\n### 详细分析\\n[分维度分析]\\n\\n### 改进建议\\n[按优先级列出改进方向]"
+}
+
+重要：
+- overall_score 是 0-100 的整数
+- strengths 列出 3-5 条具体优点
+- weaknesses 列出 3-5 条具体不足
+- learning_path 列出 3-6 条具体学习建议
+- detailed_feedback 使用 Markdown 格式，结构清晰"""
+
 
 async def call_minimax(messages: list[dict]) -> str:
     url = f"{settings.MINIMAX_BASE_URL}/text/chatcompletion_v2"
@@ -89,6 +182,18 @@ async def call_minimax(messages: list[dict]) -> str:
         return data["choices"][0]["message"]["content"]
 
 
+def _clean_json_response(result: str) -> str:
+    """Strip markdown code fences from a JSON response."""
+    cleaned = result.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    if cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    return cleaned.strip()
+
+
 async def parse_interview(content: str, company: str) -> list[dict]:
     user_message = f"公司：{company}\n\n面经内容：\n{content}" if company else f"面经内容：\n{content}"
 
@@ -99,14 +204,7 @@ async def parse_interview(content: str, company: str) -> list[dict]:
 
     try:
         result = await call_minimax(messages)
-        cleaned = result.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+        cleaned = _clean_json_response(result)
 
         parsed = json.loads(cleaned)
         if not isinstance(parsed, list):
@@ -156,14 +254,7 @@ async def analyze_resume(resume_content: str, target_position: str = "") -> dict
 
     try:
         result = await call_minimax(messages)
-        cleaned = result.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        if cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
+        cleaned = _clean_json_response(result)
 
         parsed = json.loads(cleaned)
 
@@ -188,4 +279,95 @@ async def analyze_resume(resume_content: str, target_position: str = "") -> dict
         raise ValueError(f"AI 返回格式错误，解析失败：{str(e)}")
     except Exception as e:
         logger.error(f"Error analyzing resume with MiniMax: {e}")
+        raise
+
+
+async def format_resume_markdown(raw_text: str) -> str:
+    """将简历原始文本格式化为 Markdown。"""
+    messages = [
+        {"role": "system", "content": FORMAT_RESUME_PROMPT},
+        {"role": "user", "content": raw_text},
+    ]
+    try:
+        result = await call_minimax(messages)
+        return _clean_json_response(result)
+    except Exception as e:
+        logger.error(f"Error formatting resume: {e}")
+        raise
+
+
+async def interview_chat(
+    resume_text: str,
+    history: list[dict],
+    target_position: str = "",
+) -> tuple[str, bool]:
+    """进行一次面试对话。返回 (AI消息, 是否结束)。"""
+    system_prompt = INTERVIEW_SYSTEM_PROMPT.format(
+        target_position=target_position or "未指定",
+        resume_text=resume_text,
+    )
+
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+
+    for msg in history:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        # Map 'interviewer' -> 'assistant' for the LLM
+        api_role = "assistant" if role == "interviewer" else "user"
+        messages.append({"role": api_role, "content": content})
+
+    try:
+        result = await call_minimax(messages)
+        is_complete = "面试结束" in result or "面试到此结束" in result
+        return result.strip(), is_complete
+    except Exception as e:
+        logger.error(f"Error in interview chat: {e}")
+        raise
+
+
+async def evaluate_interview(
+    resume_text: str,
+    history: list[dict],
+    target_position: str = "",
+) -> dict:
+    """评估整场面试表现，返回评分和分析。"""
+    # Format conversation history as text
+    history_text_parts = []
+    for msg in history:
+        role_label = "面试官" if msg.get("role") == "interviewer" else "候选人"
+        history_text_parts.append(f"{role_label}：{msg.get('content', '')}")
+    history_text = "\n\n".join(history_text_parts)
+
+    user_message = f"目标岗位：{target_position}\n\n简历内容：\n{resume_text}\n\n面试对话记录：\n{history_text}" if target_position else f"简历内容：\n{resume_text}\n\n面试对话记录：\n{history_text}"
+
+    messages = [
+        {"role": "system", "content": EVALUATION_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+
+    try:
+        result = await call_minimax(messages)
+        cleaned = _clean_json_response(result)
+        parsed = json.loads(cleaned)
+
+        if not isinstance(parsed, dict):
+            raise ValueError("AI 返回格式错误，不是有效的 JSON 对象")
+
+        parsed.setdefault("overall_score", 60)
+        parsed.setdefault("strengths", [])
+        parsed.setdefault("weaknesses", [])
+        parsed.setdefault("learning_path", [])
+        parsed.setdefault("detailed_feedback", "")
+
+        # Ensure score is a valid int
+        score = parsed["overall_score"]
+        if not isinstance(score, int) or score < 0 or score > 100:
+            parsed["overall_score"] = max(0, min(100, int(score) if isinstance(score, (int, float)) else 60))
+
+        return parsed
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse evaluation response: {e}, response: {result}")
+        raise ValueError(f"AI 评估返回格式错误：{str(e)}")
+    except Exception as e:
+        logger.error(f"Error evaluating interview: {e}")
         raise

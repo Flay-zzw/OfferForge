@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse } from './types';
+import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse, ResumeExtractResponse, InterviewChatRequest, InterviewChatResponse, InterviewEvaluateRequest, InterviewEvaluateResponse } from './types';
 
 const API_BASE = '/api';
 
@@ -51,4 +51,28 @@ export const api = {
       headers: {},
     });
   },
+
+  extractResume: (file: File, targetPosition?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (targetPosition) formData.append('target_position', targetPosition);
+
+    return fetchAPI<ResumeExtractResponse>('/mock-interview/resume/extract', {
+      method: 'POST',
+      body: formData,
+      headers: {},
+    });
+  },
+
+  interviewChat: (data: InterviewChatRequest) =>
+    fetchAPI<InterviewChatResponse>('/mock-interview/chat', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  evaluateInterview: (data: InterviewEvaluateRequest) =>
+    fetchAPI<InterviewEvaluateResponse>('/mock-interview/evaluate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
