@@ -1,11 +1,31 @@
-import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse, ResumeExtractResponse, InterviewChatRequest, InterviewChatResponse, InterviewEvaluateRequest, InterviewEvaluateResponse } from './types';
+import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse, ResumeExtractResponse, InterviewChatRequest, InterviewChatResponse, InterviewEvaluateRequest, InterviewEvaluateResponse, LoginRequest, RegisterRequest, TokenResponse, UserInfo } from './types';
 
 const API_BASE = '/api';
 
+function getToken(): string | null {
+  return localStorage.getItem('offerforge-token');
+}
+
 async function fetchAPI<T>(url: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options?.headers) {
+    // preserve FormData empty headers
+    for (const [k, v] of Object.entries(options.headers as Record<string, string>)) {
+      headers[k] = v;
+    }
+  }
+  // Don't set Content-Type for FormData (browser auto-sets with boundary)
+  if (!(options?.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
@@ -15,6 +35,22 @@ async function fetchAPI<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // ---------- Auth ----------
+  login: (data: LoginRequest) =>
+    fetchAPI<TokenResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  register: (data: RegisterRequest) =>
+    fetchAPI<TokenResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getMe: () => fetchAPI<UserInfo>('/auth/me'),
+
+  // ---------- Questions ----------
   getQuestions: (params?: { company?: string; difficulty?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.company) searchParams.set('company', params.company);
@@ -48,7 +84,6 @@ export const api = {
     return fetchAPI<ResumeAnalyzeResponse>('/resume/analyze', {
       method: 'POST',
       body: formData,
-      headers: {},
     });
   },
 
@@ -60,7 +95,6 @@ export const api = {
     return fetchAPI<ResumeExtractResponse>('/mock-interview/resume/extract', {
       method: 'POST',
       body: formData,
-      headers: {},
     });
   },
 

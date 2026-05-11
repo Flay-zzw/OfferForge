@@ -179,7 +179,23 @@ async def call_minimax(messages: list[dict]) -> str:
         response = await client.post(url, headers=headers, json=payload)
         response.raise_for_status()
         data = response.json()
-        return data["choices"][0]["message"]["content"]
+
+        choices = data.get("choices")
+        if not choices or not isinstance(choices, list):
+            logger.error(f"MiniMax API returned unexpected response: {json.dumps(data, ensure_ascii=False)[:500]}")
+            raise ValueError(f"MiniMax API 返回了异常的响应格式，choices 为空或不存在")
+
+        message = choices[0].get("message")
+        if not message or not isinstance(message, dict):
+            logger.error(f"MiniMax API returned unexpected choice: {json.dumps(choices[0], ensure_ascii=False)[:500]}")
+            raise ValueError(f"MiniMax API 返回的消息为空")
+
+        content = message.get("content")
+        if not content or not isinstance(content, str):
+            logger.error(f"MiniMax API returned empty content in message: {json.dumps(message, ensure_ascii=False)[:500]}")
+            raise ValueError(f"MiniMax API 返回的内容为空")
+
+        return content
 
 
 def _clean_json_response(result: str) -> str:
@@ -308,6 +324,10 @@ async def interview_chat(
     )
 
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
+
+    if not history:
+        # MiniMax requires at least one user message; add a trigger to start
+        messages.append({"role": "user", "content": "开始面试"})
 
     for msg in history:
         role = msg.get("role", "user")

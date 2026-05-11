@@ -1,3 +1,31 @@
+// ---------- Auth ----------
+export interface RegisterRequest {
+  account: string;
+  password: string;
+  nickname?: string;
+}
+
+export interface LoginRequest {
+  account: string;
+  password: string;
+}
+
+export interface UserInfo {
+  userid: number;
+  account: string;
+  nickname: string;
+  avatar: string;
+  email: string;
+  created_at: string | null;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: UserInfo;
+}
+
+// ---------- Questions ----------
 export interface Question {
   id: number;
   company: string;

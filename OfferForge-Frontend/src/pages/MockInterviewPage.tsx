@@ -2,8 +2,26 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Loader2, Sparkles, Briefcase, AlertCircle, CheckCircle,
   Upload, FileText, X, File, Image, FileSpreadsheet, Send, Bot, User,
-  ChevronRight, RotateCcw, Star, TrendingUp, BookOpen, Target,
+  ChevronRight, RotateCcw, Star, TrendingUp, BookOpen, Target, Mic, MicOff,
 } from 'lucide-react';
+
+declare global {
+  interface SpeechRecognition extends EventTarget {
+    lang: string;
+    interimResults: boolean;
+    continuous: boolean;
+    start(): void;
+    stop(): void;
+    onresult: ((event: SpeechRecognitionEvent) => void) | null;
+    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+    onend: (() => void) | null;
+  }
+
+  interface Window {
+    SpeechRecognition: { new(): SpeechRecognition } | undefined;
+    webkitSpeechRecognition: { new(): SpeechRecognition } | undefined;
+  }
+}
 import ReactMarkdown from 'react-markdown';
 import { api } from '../api';
 import type { InterviewMessage, InterviewEvaluateResponse } from '../types';
@@ -47,10 +65,14 @@ export default function MockInterviewPage() {
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState<InterviewEvaluateResponse | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const accumulatedRef = useRef('');
 
   // Auto-scroll chat
   useEffect(() => {
@@ -63,6 +85,90 @@ export default function MockInterviewPage() {
       inputRef.current?.focus();
     }
   }, [step, loading]);
+
+  // Init SpeechRecognition
+  useEffect(() => {
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) return;
+    setSpeechSupported(true);
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = 'zh-CN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    let accumulated = accumulatedRef; // survives across recognition restarts within a recording session
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          accumulated.current += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      setInput(accumulated.current + interim);
+    };
+
+    recognition.onerror = (event: Event) => {
+      const e = event as SpeechRecognitionErrorEvent;
+      if (e.error === 'no-speech') return; // don't stop, let onend restart
+      if (e.error === 'aborted') {
+        // aborted by stopRecording — don't restart
+        return;
+      }
+      console.warn('Speech recognition error:', e.error);
+    };
+
+    recognition.onend = () => {
+      // If still in recording mode, auto-restart to keep listening
+      if (recognitionRef.current && isRecordingRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch {
+          // can't restart right now, try again shortly
+          setTimeout(() => {
+            if (recognitionRef.current && isRecordingRef.current) {
+              try { recognitionRef.current.start(); } catch { /* give up */ }
+            }
+          }, 300);
+        }
+      } else {
+        setIsRecording(false);
+      }
+    };
+
+    recognitionRef.current = recognition;
+  }, []);
+
+  // Keep a ref mirror of isRecording so the onend closure always reads the latest value
+  const isRecordingRef = useRef(false);
+  useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
+
+  const startRecording = useCallback(() => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    accumulatedRef.current = '';
+    setInput('');
+    try {
+      rec.start();
+      setIsRecording(true);
+    } catch {
+      // already started, ignore
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+  }, []);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) stopRecording();
+    else startRecording();
+  }, [isRecording, startRecording, stopRecording]);
 
   // ---------- File helpers ----------
   const validateFile = useCallback((f: File): string | null => {
@@ -149,6 +255,7 @@ export default function MockInterviewPage() {
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setInput('');
+    accumulatedRef.current = '';
     setLoading(true);
 
     try {
@@ -409,17 +516,27 @@ export default function MockInterviewPage() {
 
               {/* Input */}
               <div style={styles.inputArea}>
-                <div style={styles.inputWrapper}>
+                <div style={{ ...styles.inputWrapper, ...(isRecording ? styles.inputWrapperRecording : {}) }}>
                   <textarea
                     ref={inputRef}
                     style={styles.textarea}
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="输入你的回答，Shift+Enter 换行..."
+                    placeholder={isRecording ? '正在聆听... 请说话' : '输入你的回答，Shift+Enter 换行，或点击麦克风语音输入'}
                     rows={1}
                     disabled={loading}
                   />
+                  {speechSupported && (
+                    <button
+                      style={{ ...styles.micBtn, ...(isRecording ? styles.micBtnActive : {}) }}
+                      onClick={toggleRecording}
+                      disabled={loading}
+                      title={isRecording ? '停止录音' : '语音输入'}
+                    >
+                      {isRecording ? <MicOff size={17} /> : <Mic size={17} />}
+                    </button>
+                  )}
                   <button
                     style={{ ...styles.sendBtn, ...(input.trim() && !loading ? styles.sendBtnActive : {}) }}
                     onClick={handleSendAnswer}
@@ -523,6 +640,10 @@ export default function MockInterviewPage() {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes micPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+          50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
         }
       `}</style>
     </div>
@@ -791,6 +912,24 @@ const styles: Record<string, React.CSSProperties> = {
   sendBtnActive: {
     background: 'linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%)',
     color: '#ffffff', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.4)',
+  },
+
+  // Mic button
+  micBtn: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 38, height: 38, border: 'none', borderRadius: '12px',
+    background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)',
+    transition: 'all var(--transition-fast)', flexShrink: 0, cursor: 'pointer',
+  },
+  micBtnActive: {
+    background: 'var(--danger)',
+    color: '#ffffff',
+    boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.6)',
+    animation: 'micPulse 1.5s ease-in-out infinite',
+  },
+  inputWrapperRecording: {
+    borderColor: 'var(--danger)',
+    boxShadow: '0 0 0 3px rgba(239, 68, 68, 0.15)',
   },
 
   // Evaluating step

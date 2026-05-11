@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
+from app.routers.auth import router as auth_router
 from app.routers.mock_interview import router as mock_interview_router
 from app.routers.questions import router as questions_router
 
@@ -29,6 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(questions_router, prefix="/api")
 app.include_router(mock_interview_router, prefix="/api")
 

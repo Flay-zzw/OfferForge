@@ -4,7 +4,14 @@
       "Bash(npx tsc *)",
       "Bash(python -m py_compile app/schemas.py)",
       "Bash(python -m py_compile app/minimax.py)",
-      "Bash(python -m py_compile app/routers/mock_interview.py)"
+      "Bash(python -m py_compile app/routers/mock_interview.py)",
+      "Bash(pip install *)",
+      "Bash(python -c \"from app.main import app; print\\('Backend OK, routes:', [r.path for r in app.routes]\\)\")",
+      "Bash(D:/DeskTop/project/OfferForge/OfferForge-Backend/venv/Scripts/python.exe -c \"import jose; print\\('jose OK'\\)\")",
+      "Bash(D:/DeskTop/project/OfferForge/OfferForge-Backend/venv/Scripts/pip install *)",
+      "Bash(./venv/Scripts/pip install *)",
+      "Bash(./venv/Scripts/python -c \"from app.main import app; print\\('Backend OK, routes:', [r.path for r in app.routes]\\)\")",
+      "Bash(npx vite *)"
     ]
   }
 }

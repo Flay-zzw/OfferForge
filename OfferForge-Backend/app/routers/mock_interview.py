@@ -1,7 +1,9 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from app.dependencies import get_current_user
 from app.file_parser import extract_text, is_supported
 from app.minimax import format_resume_markdown, interview_chat, evaluate_interview
+from app.models import User
 from app.schemas import (
     ResumeExtractResponse,
     InterviewChatRequest,
@@ -17,6 +19,7 @@ router = APIRouter()
 async def resume_extract_endpoint(
     file: UploadFile = File(...),
     target_position: str = Form(""),
+    user: User = Depends(get_current_user),
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="请上传一个文件")
@@ -53,7 +56,10 @@ async def resume_extract_endpoint(
 
 
 @router.post("/mock-interview/chat", response_model=InterviewChatResponse)
-async def interview_chat_endpoint(request: InterviewChatRequest):
+async def interview_chat_endpoint(
+    request: InterviewChatRequest,
+    user: User = Depends(get_current_user),
+):
     try:
         history_dicts = [
             {"role": m.role, "content": m.content}
@@ -73,7 +79,10 @@ async def interview_chat_endpoint(request: InterviewChatRequest):
 
 
 @router.post("/mock-interview/evaluate", response_model=InterviewEvaluateResponse)
-async def interview_evaluate_endpoint(request: InterviewEvaluateRequest):
+async def interview_evaluate_endpoint(
+    request: InterviewEvaluateRequest,
+    user: User = Depends(get_current_user),
+):
     try:
         history_dicts = [
             {"role": m.role, "content": m.content}
