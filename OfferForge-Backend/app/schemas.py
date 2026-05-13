@@ -113,6 +113,7 @@ class InterviewChatRequest(BaseModel):
     resume_text: str
     conversation_history: list[InterviewMessage] = []
     target_position: str = ""
+    skip_action: str = ""  # "", "skip", "dont_know"
 
 
 class InterviewChatResponse(BaseModel):

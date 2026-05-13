@@ -87,6 +87,7 @@ export interface InterviewChatRequest {
   resume_text: string;
   conversation_history: InterviewMessage[];
   target_position?: string;
+  skip_action?: string;  // "", "skip", "dont_know"
 }
 
 export interface InterviewChatResponse {

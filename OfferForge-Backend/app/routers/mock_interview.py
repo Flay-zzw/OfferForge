@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.dependencies import get_current_user
 from app.file_parser import extract_text, is_supported
-from app.minimax import format_resume_markdown, interview_chat, evaluate_interview
-from app.models import User
+from app.minimax import format_resume_markdown, interview_chat, evaluate_interview, generate_question_answer
+from app.models import User, Question
 from app.schemas import (
     ResumeExtractResponse,
     InterviewChatRequest,
@@ -58,6 +60,7 @@ async def resume_extract_endpoint(
 @router.post("/mock-interview/chat", response_model=InterviewChatResponse)
 async def interview_chat_endpoint(
     request: InterviewChatRequest,
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     try:
@@ -66,10 +69,33 @@ async def interview_chat_endpoint(
             for m in request.conversation_history
         ]
 
+        # If user clicked "我不知道", save question + AI-generated answer to question bank
+        if request.skip_action == "dont_know" and history_dicts:
+            last_interviewer_msg = None
+            for m in reversed(history_dicts):
+                if m.get("role") == "interviewer":
+                    last_interviewer_msg = m.get("content", "")
+                    break
+
+            if last_interviewer_msg:
+                try:
+                    answer = await generate_question_answer(last_interviewer_msg)
+                    db_question = Question(
+                        company="未知",
+                        difficulty="中等",
+                        question=last_interviewer_msg,
+                        answer=answer,
+                    )
+                    db.add(db_question)
+                    await db.commit()
+                except Exception:
+                    pass  # Don't block the interview flow if saving fails
+
         message, is_complete = await interview_chat(
             resume_text=request.resume_text,
             history=history_dicts,
             target_position=request.target_position,
+            skip_action=request.skip_action,
         )
 
         return InterviewChatResponse(message=message, is_complete=is_complete)

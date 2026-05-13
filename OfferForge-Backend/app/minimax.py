@@ -316,6 +316,7 @@ async def interview_chat(
     resume_text: str,
     history: list[dict],
     target_position: str = "",
+    skip_action: str = "",
 ) -> tuple[str, bool]:
     """进行一次面试对话。返回 (AI消息, 是否结束)。"""
     system_prompt = INTERVIEW_SYSTEM_PROMPT.format(
@@ -326,15 +327,19 @@ async def interview_chat(
     messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
     if not history:
-        # MiniMax requires at least one user message; add a trigger to start
         messages.append({"role": "user", "content": "开始面试"})
 
     for msg in history:
         role = msg.get("role", "user")
         content = msg.get("content", "")
-        # Map 'interviewer' -> 'assistant' for the LLM
         api_role = "assistant" if role == "interviewer" else "user"
         messages.append({"role": api_role, "content": content})
+
+    # If skipping, inject a skip message to tell AI to move on
+    if skip_action == "skip":
+        messages.append({"role": "user", "content": "这道题我选择跳过，请换一道新的面试题（不要重复之前问过的话题）。"})
+    elif skip_action == "dont_know":
+        messages.append({"role": "user", "content": "这道题我不太清楚答案，请换一道新的面试题（不要重复之前问过的话题）。"})
 
     try:
         result = await call_minimax(messages)
@@ -342,6 +347,24 @@ async def interview_chat(
         return result.strip(), is_complete
     except Exception as e:
         logger.error(f"Error in interview chat: {e}")
+        raise
+
+
+async def generate_question_answer(question: str) -> str:
+    """为一道面试题生成参考答案。"""
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一个资深技术面试官。请为以下面试题生成一份详细、有条理的参考答案。使用清晰的分点方式回答，便于阅读。不要使用 Markdown 表格。",
+        },
+        {"role": "user", "content": f"请为这道面试题生成参考答案：\n{question}"},
+    ]
+
+    try:
+        result = await call_minimax(messages)
+        return result.strip()
+    except Exception as e:
+        logger.error(f"Error generating answer for question: {e}")
         raise
 
 

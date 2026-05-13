@@ -291,6 +291,44 @@ export default function MockInterviewPage() {
     handleEvaluate(messages);
   };
 
+  // ---------- Step 3: Skip / Don't know ----------
+  const handleSkip = async (action: 'skip' | 'dont_know') => {
+    if (loading) return;
+
+    const label = action === 'skip' ? '跳过此题' : '我不知道';
+    const actionMsg: InterviewMessage = { role: 'user', content: label };
+    const updatedMessages = [...messages, actionMsg];
+    setMessages(updatedMessages);
+    setLoading(true);
+
+    try {
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
+      const res = await api.interviewChat({
+        resume_text: resumeRaw,
+        conversation_history: history,
+        target_position: targetPosition || undefined,
+        skip_action: action === 'skip' ? 'skip' : 'dont_know',
+      });
+
+      const aiMsg: InterviewMessage = { role: 'interviewer', content: res.message };
+      setMessages(prev => [...prev, aiMsg]);
+
+      if (res.is_complete) {
+        setStep('evaluating');
+        handleEvaluate([...updatedMessages, aiMsg]);
+      }
+    } catch (err) {
+      const errMsg: InterviewMessage = {
+        role: 'interviewer',
+        content: `抱歉，出错了：${err instanceof Error ? err.message : '未知错误'}，请重试。`,
+      };
+      setMessages(prev => [...prev, errMsg]);
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
+  };
+
   const handleEvaluate = async (msgs: InterviewMessage[]) => {
     try {
       const history = msgs.map(m => ({ role: m.role, content: m.content }));
@@ -513,6 +551,18 @@ export default function MockInterviewPage() {
                 )}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Skip action buttons */}
+              {!loading && messages.length > 0 && messages[messages.length - 1].role === 'interviewer' && (
+                <div style={styles.skipButtonsRow}>
+                  <button style={styles.skipDontKnowBtn} onClick={() => handleSkip('dont_know')}>
+                    我不知道
+                  </button>
+                  <button style={styles.skipBtn} onClick={() => handleSkip('skip')}>
+                    跳过
+                  </button>
+                </div>
+              )}
 
               {/* Input */}
               <div style={styles.inputArea}>
@@ -888,6 +938,21 @@ const styles: Record<string, React.CSSProperties> = {
   botBubble: {
     background: 'var(--bg-secondary)', color: 'var(--text-primary)',
     border: '1px solid var(--border-primary)', borderBottomLeftRadius: 6,
+  },
+
+  // Skip action buttons
+  skipButtonsRow: {
+    display: 'flex', justifyContent: 'center', gap: 12, padding: '8px 0 4px',
+  },
+  skipBtn: {
+    padding: '6px 20px', border: '1px solid var(--border-primary)', borderRadius: '8px',
+    background: 'var(--bg-secondary)', color: 'var(--text-secondary)',
+    fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all var(--transition-fast)',
+  },
+  skipDontKnowBtn: {
+    padding: '6px 20px', border: '1px solid var(--warning)', borderRadius: '8px',
+    background: 'var(--warning-light)', color: 'var(--warning)',
+    fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all var(--transition-fast)',
   },
 
   // Input

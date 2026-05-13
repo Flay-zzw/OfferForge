@@ -11,7 +11,10 @@
       "Bash(D:/DeskTop/project/OfferForge/OfferForge-Backend/venv/Scripts/pip install *)",
       "Bash(./venv/Scripts/pip install *)",
       "Bash(./venv/Scripts/python -c \"from app.main import app; print\\('Backend OK, routes:', [r.path for r in app.routes]\\)\")",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(./node_modules/.bin/tsc --noEmit --pretty)",
+      "Bash(\"D:/DeskTop/project/OfferForge/OfferForge-Frontend/node_modules/.bin/tsc\" --noEmit --pretty)",
+      "Bash(\"D:/DeskTop/project/OfferForge/OfferForge-Frontend/node_modules/.bin/tsc\" -p \"D:/DeskTop/project/OfferForge/OfferForge-Frontend/tsconfig.json\" --noEmit --pretty)"
     ]
   }
 }
