@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageSquare, BookOpen, Sun, Moon, Flame, FileText, Briefcase, User, LogOut, ChevronDown } from 'lucide-react';
+import { MessageSquare, BookOpen, Sun, Moon, Flame, FileText, Briefcase, User, LogOut, ChevronDown, FileSearch, TrendingUp } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth, getDefaultAvatar } from '../contexts/AuthContext';
 import type { ReactNode } from 'react';
 
 interface LayoutProps {
-  activeTab: 'chat' | 'questions' | 'parse' | 'mock-interview';
-  onTabChange: (tab: 'chat' | 'questions' | 'parse' | 'mock-interview') => void;
+  activeTab: 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'progress';
+  onTabChange: (tab: 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'progress') => void;
   onLoginClick: () => void;
   children: ReactNode;
 }
@@ -77,6 +77,26 @@ export default function Layout({ activeTab, onTabChange, onLoginClick, children 
           >
             <Briefcase size={16} />
             <span>模拟面试</span>
+          </button>
+          <button
+            style={{
+              ...styles.tab,
+              ...(activeTab === 'resume-analyze' ? styles.tabActive : {}),
+            }}
+            onClick={() => onTabChange('resume-analyze')}
+          >
+            <FileSearch size={16} />
+            <span>简历分析</span>
+          </button>
+          <button
+            style={{
+              ...styles.tab,
+              ...(activeTab === 'progress' ? styles.tabActive : {}),
+            }}
+            onClick={() => onTabChange('progress')}
+          >
+            <TrendingUp size={16} />
+            <span>学习进度</span>
           </button>
         </div>
         <div style={styles.headerRight}>

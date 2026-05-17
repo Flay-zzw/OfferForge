@@ -109,3 +109,34 @@ export interface InterviewEvaluateResponse {
   learning_path: string[];
   detailed_feedback: string;
 }
+
+// ---------- Evaluations ----------
+export interface EvaluationListItem {
+  id: number;
+  overall_score: number;
+  strengths: string[];
+  weaknesses: string[];
+  target_position: string | null;
+  created_at: string | null;
+}
+
+export interface EvaluationDetail extends EvaluationListItem {
+  user_id: number;
+  learning_path: string[];
+  detailed_feedback: string;
+}
+
+export interface EvaluationStats {
+  scores: number[];
+  average_score: number;
+  total_count: number;
+  latest_score: number | null;
+  score_change: number | null;
+}
+
+export interface StudyPlan {
+  focus_areas: string[];
+  weekly_plan: { day: string; task: string }[];
+  long_term_goals: string[];
+  resource_recommendations: string[];
+}

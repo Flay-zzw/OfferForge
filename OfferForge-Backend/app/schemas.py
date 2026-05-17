@@ -134,3 +134,42 @@ class InterviewEvaluateResponse(BaseModel):
     weaknesses: list[str]
     learning_path: list[str]
     detailed_feedback: str
+
+
+# ---------- Evaluations ----------
+class EvaluationResponse(BaseModel):
+    id: int
+    user_id: int
+    overall_score: int
+    strengths: list[str]
+    weaknesses: list[str]
+    learning_path: list[str]
+    detailed_feedback: str
+    target_position: str | None = None
+    created_at: datetime | None = None
+    model_config = {"from_attributes": True}
+
+
+class EvaluationListItem(BaseModel):
+    id: int
+    overall_score: int
+    strengths: list[str]
+    weaknesses: list[str]
+    target_position: str | None = None
+    created_at: datetime | None = None
+    model_config = {"from_attributes": True}
+
+
+class EvaluationStatsResponse(BaseModel):
+    scores: list[int]
+    average_score: float
+    total_count: int
+    latest_score: int | None
+    score_change: int | None
+
+
+class StudyPlanResponse(BaseModel):
+    focus_areas: list[str]
+    weekly_plan: list[dict]
+    long_term_goals: list[str]
+    resource_recommendations: list[str]

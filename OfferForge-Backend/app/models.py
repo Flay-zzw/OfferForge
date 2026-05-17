@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -31,3 +31,17 @@ class Question(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now()
     )
+
+
+class Evaluation(Base):
+    __tablename__ = "evaluations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.userid"), nullable=False, index=True)
+    overall_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    strengths: Mapped[str] = mapped_column(Text, default="[]")
+    weaknesses: Mapped[str] = mapped_column(Text, default="[]")
+    learning_path: Mapped[str] = mapped_column(Text, default="[]")
+    detailed_feedback: Mapped[str] = mapped_column(Text, default="")
+    target_position: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

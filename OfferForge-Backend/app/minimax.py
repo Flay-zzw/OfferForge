@@ -368,6 +368,80 @@ async def generate_question_answer(question: str) -> str:
         raise
 
 
+STUDY_PLAN_PROMPT = """你是一位资深面试教练和学习规划专家。你需要根据候选人过去多次模拟面试的评估结果，制定一份个性化的学习提升计划。
+
+## 输入说明
+你会收到一组历史评估数据的摘要，包含每次评估的分数、优点和不足。
+
+## 分析步骤
+1. 找出最常出现的弱点（高频弱项）
+2. 分析分数变化趋势（进步还是退步）
+3. 结合优缺点，制定可行的学习计划
+
+## 输出要求
+请严格按照以下 JSON 格式返回，不要返回任何其他内容：
+{
+  "focus_areas": [
+    "最需要提升的方向1（基于高频弱项）",
+    "最需要提升的方向2",
+    "最需要提升的方向3"
+  ],
+  "weekly_plan": [
+    {"day": "周一", "task": "具体学习任务描述"},
+    {"day": "周二", "task": "具体学习任务描述"},
+    {"day": "周三", "task": "具体学习任务描述"},
+    {"day": "周四", "task": "具体学习任务描述"},
+    {"day": "周五", "task": "具体学习任务描述"},
+    {"day": "周六", "task": "具体学习任务描述"},
+    {"day": "周日", "task": "具体学习任务描述"}
+  ],
+  "long_term_goals": [
+    "30天目标1：具体可衡量的目标",
+    "30天目标2",
+    "30天目标3"
+  ],
+  "resource_recommendations": [
+    "推荐资源1：具体的书籍/课程/练习方向",
+    "推荐资源2",
+    "推荐资源3"
+  ]
+}
+
+重要：
+- 每周计划要具体、可执行，每天一个明确任务
+- 长期目标要有时限和可衡量标准
+- 资源推荐要具体到领域或平台
+- 不要使用 Markdown 表格"""
+
+
+async def generate_study_plan(evaluations_summary: str) -> dict:
+    messages = [
+        {"role": "system", "content": STUDY_PLAN_PROMPT},
+        {"role": "user", "content": f"历史评估记录：\n{evaluations_summary}"},
+    ]
+
+    try:
+        result = await call_minimax(messages)
+        cleaned = _clean_json_response(result)
+        parsed = json.loads(cleaned)
+
+        if not isinstance(parsed, dict):
+            raise ValueError("AI 返回格式错误，不是有效的 JSON 对象")
+
+        parsed.setdefault("focus_areas", [])
+        parsed.setdefault("weekly_plan", [])
+        parsed.setdefault("long_term_goals", [])
+        parsed.setdefault("resource_recommendations", [])
+
+        return parsed
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse study plan: {e}, response: {result}")
+        raise ValueError(f"AI 返回格式错误，解析失败：{str(e)}")
+    except Exception as e:
+        logger.error(f"Error generating study plan: {e}")
+        raise
+
+
 async def evaluate_interview(
     resume_text: str,
     history: list[dict],

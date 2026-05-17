@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,7 +7,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.file_parser import extract_text, is_supported
 from app.minimax import format_resume_markdown, interview_chat, evaluate_interview, generate_question_answer
-from app.models import User, Question
+from app.models import User, Question, Evaluation
 from app.schemas import (
     ResumeExtractResponse,
     InterviewChatRequest,
@@ -107,6 +109,7 @@ async def interview_chat_endpoint(
 @router.post("/mock-interview/evaluate", response_model=InterviewEvaluateResponse)
 async def interview_evaluate_endpoint(
     request: InterviewEvaluateRequest,
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     try:
@@ -120,6 +123,19 @@ async def interview_evaluate_endpoint(
             history=history_dicts,
             target_position=request.target_position,
         )
+
+        # Save evaluation to DB
+        evaluation = Evaluation(
+            user_id=user.userid,
+            overall_score=result["overall_score"],
+            strengths=json.dumps(result["strengths"], ensure_ascii=False),
+            weaknesses=json.dumps(result["weaknesses"], ensure_ascii=False),
+            learning_path=json.dumps(result["learning_path"], ensure_ascii=False),
+            detailed_feedback=result["detailed_feedback"],
+            target_position=request.target_position or None,
+        )
+        db.add(evaluation)
+        await db.commit()
 
         return InterviewEvaluateResponse(
             overall_score=result["overall_score"],

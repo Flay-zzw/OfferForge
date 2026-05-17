@@ -6,12 +6,14 @@ import ChatPage from './pages/ChatPage';
 import QuestionsPage from './pages/QuestionsPage';
 import ParsePage from './pages/ParsePage';
 import MockInterviewPage from './pages/MockInterviewPage';
+import ResumeAnalyzePage from './pages/ResumeAnalyzePage';
+import ProgressPage from './pages/ProgressPage';
 import AuthPage from './pages/AuthPage';
 import './styles/global.css';
 
-type Tab = 'chat' | 'questions' | 'parse' | 'mock-interview';
+type Tab = 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'progress';
 
-const RESTRICTED_TABS: Tab[] = ['chat', 'parse', 'mock-interview'];
+const RESTRICTED_TABS: Tab[] = ['chat', 'parse', 'mock-interview', 'resume-analyze', 'progress'];
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('chat');
@@ -54,8 +56,12 @@ function AppContent() {
           <QuestionsPage />
         ) : activeTab === 'parse' ? (
           <ParsePage />
-        ) : (
+        ) : activeTab === 'mock-interview' ? (
           <MockInterviewPage />
+        ) : activeTab === 'resume-analyze' ? (
+          <ResumeAnalyzePage />
+        ) : (
+          <ProgressPage />
         )}
       </Layout>
       {showAuth && <AuthPage onClose={() => setShowAuth(false)} />}
