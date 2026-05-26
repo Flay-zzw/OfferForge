@@ -71,6 +71,38 @@ export interface ResumeAnalyzeResponse {
   overall_analysis: string;
 }
 
+// ---------- Resume Review ----------
+export interface DimensionScore {
+  name: string;
+  score: number;
+  comment: string;
+}
+
+export interface ResumeSuggestion {
+  section: string;
+  original_text: string;
+  issue: string;
+  suggestion: string;
+  priority: string;
+}
+
+export interface PositionMatch {
+  matched: string[];
+  missing: string[];
+  score: number;
+  advice: string;
+}
+
+export interface ResumeReviewResponse {
+  overall_score: number;
+  dimensions: DimensionScore[];
+  strengths: string[];
+  weaknesses: string[];
+  suggestions: ResumeSuggestion[];
+  position_match: PositionMatch | null;
+  summary: string;
+}
+
 // ---------- Mock Interview: Resume Extract ----------
 export interface ResumeExtractResponse {
   resume_markdown: string;

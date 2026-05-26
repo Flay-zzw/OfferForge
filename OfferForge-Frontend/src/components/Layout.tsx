@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageSquare, BookOpen, Sun, Moon, Flame, FileText, Briefcase, User, LogOut, ChevronDown, FileSearch, TrendingUp } from 'lucide-react';
+import { MessageSquare, BookOpen, Sun, Moon, Flame, FileText, Briefcase, User, LogOut, ChevronDown, FileSearch, FilePenLine, TrendingUp } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth, getDefaultAvatar } from '../contexts/AuthContext';
 import type { ReactNode } from 'react';
 
 interface LayoutProps {
-  activeTab: 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'progress';
-  onTabChange: (tab: 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'progress') => void;
+  activeTab: 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'resume-review' | 'progress';
+  onTabChange: (tab: 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'resume-review' | 'progress') => void;
   onLoginClick: () => void;
   children: ReactNode;
 }
@@ -87,6 +87,16 @@ export default function Layout({ activeTab, onTabChange, onLoginClick, children 
           >
             <FileSearch size={16} />
             <span>简历分析</span>
+          </button>
+          <button
+            style={{
+              ...styles.tab,
+              ...(activeTab === 'resume-review' ? styles.tabActive : {}),
+            }}
+            onClick={() => onTabChange('resume-review')}
+          >
+            <FilePenLine size={16} />
+            <span>简历修改</span>
           </button>
           <button
             style={{

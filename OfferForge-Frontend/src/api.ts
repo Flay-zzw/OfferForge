@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse, ResumeExtractResponse, InterviewChatRequest, InterviewChatResponse, InterviewEvaluateRequest, InterviewEvaluateResponse, LoginRequest, RegisterRequest, TokenResponse, UserInfo, EvaluationListItem, EvaluationDetail, EvaluationStats, StudyPlan } from './types';
+import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse, ResumeReviewResponse, ResumeExtractResponse, InterviewChatRequest, InterviewChatResponse, InterviewEvaluateRequest, InterviewEvaluateResponse, LoginRequest, RegisterRequest, TokenResponse, UserInfo, EvaluationListItem, EvaluationDetail, EvaluationStats, StudyPlan } from './types';
 
 const API_BASE = '/api';
 
@@ -82,6 +82,17 @@ export const api = {
     if (targetPosition) formData.append('target_position', targetPosition);
 
     return fetchAPI<ResumeAnalyzeResponse>('/resume/analyze', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  reviewResume: (file: File, targetPosition?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (targetPosition) formData.append('target_position', targetPosition);
+
+    return fetchAPI<ResumeReviewResponse>('/resume/review', {
       method: 'POST',
       body: formData,
     });

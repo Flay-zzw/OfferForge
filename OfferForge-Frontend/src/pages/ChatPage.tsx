@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Trash2, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { api } from '../api';
 import type { ChatRequest } from '../types';
 
@@ -8,6 +10,62 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
+
+const codeTheme: Record<string, React.CSSProperties> = {
+  'code[class*="language-"]': { color: '#e2e8f0', background: 'none', fontFamily: 'Consolas, monospace', fontSize: '13px', textAlign: 'left', whiteSpace: 'pre', wordSpacing: 'normal', wordBreak: 'normal', wordWrap: 'normal', lineHeight: '1.7' },
+  'pre[class*="language-"]': { color: '#e2e8f0', background: '#1e293b', padding: '16px', borderRadius: '10px', overflow: 'auto', fontSize: '13px', lineHeight: '1.7' },
+  comment: { color: '#64748b' },
+  prolog: { color: '#64748b' },
+  doctype: { color: '#64748b' },
+  cdata: { color: '#64748b' },
+  punctuation: { color: '#94a3b8' },
+  property: { color: '#818cf8' },
+  tag: { color: '#f87171' },
+  boolean: { color: '#fb923c' },
+  number: { color: '#fb923c' },
+  constant: { color: '#fb923c' },
+  symbol: { color: '#fb923c' },
+  deleted: { color: '#f87171' },
+  selector: { color: '#4ade80' },
+  'attr-name': { color: '#4ade80' },
+  string: { color: '#4ade80' },
+  char: { color: '#4ade80' },
+  builtin: { color: '#4ade80' },
+  inserted: { color: '#4ade80' },
+  operator: { color: '#94a3b8' },
+  entity: { color: '#fbbf24', cursor: 'help' },
+  url: { color: '#38bdf8' },
+  variable: { color: '#e2e8f0' },
+  atrule: { color: '#818cf8' },
+  'attr-value': { color: '#4ade80' },
+  function: { color: '#818cf8' },
+  'class-name': { color: '#fbbf24' },
+  keyword: { color: '#c084fc' },
+  regex: { color: '#fb923c' },
+  important: { color: '#f87171', fontWeight: 'bold' },
+  bold: { fontWeight: 'bold' },
+  italic: { fontStyle: 'italic' },
+};
+
+const mdStyles: Record<string, React.CSSProperties> = {
+  h1: { fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginTop: 20, marginBottom: 14, lineHeight: 1.4 },
+  h2: { fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', marginTop: 18, marginBottom: 10, lineHeight: 1.4, borderBottom: '1px solid var(--border-primary)', paddingBottom: 7 },
+  h3: { fontSize: 15, fontWeight: 600, color: 'var(--accent-primary)', marginTop: 14, marginBottom: 8, lineHeight: 1.4 },
+  h4: { fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginTop: 12, marginBottom: 6, lineHeight: 1.4 },
+  p: { marginTop: 0, marginBottom: 12, lineHeight: 1.75 },
+  ul: { paddingLeft: 22, marginTop: 0, marginBottom: 12 },
+  ol: { paddingLeft: 22, marginTop: 0, marginBottom: 12 },
+  li: { marginBottom: 6, lineHeight: 1.7 },
+  blockquote: { borderLeft: '3px solid var(--accent-primary)', paddingLeft: 14, marginLeft: 0, color: 'var(--text-secondary)', fontStyle: 'italic', marginBottom: 12 },
+  strong: { fontWeight: 700, color: 'var(--text-primary)' },
+  em: { fontStyle: 'italic', color: 'var(--text-secondary)' },
+  inlineCode: { background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: 4, fontSize: 13, fontFamily: 'Consolas, monospace', color: 'var(--accent-secondary)' },
+  a: { color: 'var(--accent-primary)', textDecoration: 'underline' },
+  hr: { border: 'none', borderTop: '1px solid var(--border-primary)', margin: '16px 0' },
+  table: { width: '100%', borderCollapse: 'collapse', marginBottom: 12 },
+  th: { border: '1px solid var(--border-primary)', padding: '8px 12px', background: 'var(--bg-tertiary)', textAlign: 'left', fontWeight: 600 },
+  td: { border: '1px solid var(--border-primary)', padding: '8px 12px' },
+};
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -118,7 +176,58 @@ export default function ChatPage() {
                   ...(msg.role === 'user' ? styles.userBubble : styles.botBubble),
                 }}
               >
-                {msg.content}
+                {msg.role === 'assistant' ? (
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => <h1 style={mdStyles.h1}>{children}</h1>,
+                      h2: ({ children }) => <h2 style={mdStyles.h2}>{children}</h2>,
+                      h3: ({ children }) => <h3 style={mdStyles.h3}>{children}</h3>,
+                      h4: ({ children }) => <h4 style={mdStyles.h4}>{children}</h4>,
+                      p: ({ children }) => <p style={mdStyles.p}>{children}</p>,
+                      ul: ({ children }) => <ul style={mdStyles.ul}>{children}</ul>,
+                      ol: ({ children }) => <ol style={mdStyles.ol}>{children}</ol>,
+                      li: ({ children }) => <li style={mdStyles.li}>{children}</li>,
+                      blockquote: ({ children }) => <blockquote style={mdStyles.blockquote}>{children}</blockquote>,
+                      strong: ({ children }) => <strong style={mdStyles.strong}>{children}</strong>,
+                      em: ({ children }) => <em style={mdStyles.em}>{children}</em>,
+                      hr: () => <hr style={mdStyles.hr} />,
+                      a: ({ href, children }) => (
+                        <a href={href} style={mdStyles.a} target="_blank" rel="noopener noreferrer">
+                          {children}
+                        </a>
+                      ),
+                      table: ({ children }) => <table style={mdStyles.table}>{children}</table>,
+                      th: ({ children }) => <th style={mdStyles.th}>{children}</th>,
+                      td: ({ children }) => <td style={mdStyles.td}>{children}</td>,
+                      code: ({ node, className, children, ...props }) => {
+                        const match = /language-(\w+)/.exec(className || '');
+                        const isInline = !match && !className;
+                        return !isInline && match ? (
+                          <SyntaxHighlighter
+                            style={codeTheme as Record<string, React.CSSProperties>}
+                            language={match[1]}
+                            PreTag="div"
+                            customStyle={{
+                              margin: '1em 0',
+                              borderRadius: '10px',
+                              background: '#1e293b',
+                            }}
+                          >
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        ) : (
+                          <code className={className} style={mdStyles.inlineCode} {...props}>
+                            {children}
+                          </code>
+                        );
+                      },
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : (
+                  msg.content
+                )}
               </div>
               {msg.role === 'user' && (
                 <div style={styles.avatarUser}>

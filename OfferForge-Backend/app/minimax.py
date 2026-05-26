@@ -68,6 +68,82 @@ RESUME_ANALYZE_PROMPT = """你是一个资深技术面试官和简历分析专�
   "overall_analysis": "整体面试准备建议，包含简历优势、可能被深挖的点、建议重点准备的方向等"
 }"""
 
+RESUME_REVIEW_PROMPT = """你是一位资深 HR 和简历优化专家。用户会提供一份简历内容和目标岗位，你需要对这份简历进行全面评估，给出具体的修改建议和评分。
+
+## 评估维度（每个维度 0-100 分）
+
+1. **格式排版**：简历的结构是否清晰、排版是否美观、层次是否分明
+2. **内容完整度**：是否包含了必要的模块（个人信息、教育背景、工作经历、项目经验、技能等）
+3. **技能匹配度**：简历中的技能与目标岗位的匹配程度
+4. **经历描述质量**：工作/项目经历是否使用了 STAR 法则、是否有量化成果
+5. **语言表达**：用词是否专业、表达是否简洁有力、是否有错别字或语病
+
+## 综合评分
+
+综合评分 = 各维度加权平均（格式排版 10%、内容完整度 15%、技能匹配度 30%、经历描述质量 30%、语言表达 15%），结果四舍五入取整。
+
+## 建议要求
+
+- 修改建议要具体到某个模块或某段内容，指出原文问题和具体改进方案
+- 按优先级排序：high（紧急）> medium（一般）> low（可选）
+- 如果提供了目标岗位，分析简历与岗位的匹配度
+- 列出详细匹配的技能点和缺失的技能点
+
+## 输出格式
+
+请严格按照以下 JSON 格式返回，不要返回任何其他内容：
+{
+  "overall_score": 72,
+  "dimensions": [
+    {"name": "格式排版", "score": 80, "comment": "整体结构清晰，但部分段落过于密集，建议增加留白"},
+    {"name": "内容完整度", "score": 70, "comment": "缺少个人总结/求职意向模块"},
+    {"name": "技能匹配度", "score": 65, "comment": "Java 相关技能描述充分，但缺少微服务相关经验"},
+    {"name": "经历描述质量", "score": 68, "comment": "项目经历有一定描述但缺少量化指标"},
+    {"name": "语言表达", "score": 75, "comment": "用词基本专业，个别描述冗长需要精简"}
+  ],
+  "strengths": [
+    "技术栈描述完整，涵盖主流框架",
+    "项目经验丰富，有多样化的项目背景"
+  ],
+  "weaknesses": [
+    "缺少量化成果，难以评估实际贡献",
+    "技能描述偏泛，没有突出重点技能",
+    "排版过于紧凑，可读性不足"
+  ],
+  "suggestions": [
+    {
+      "section": "项目经历",
+      "original_text": "负责后端接口开发与维护",
+      "issue": "描述过于笼统，缺少量化成果",
+      "suggestion": "改为「设计并开发了 15+ RESTful API 接口，QPS 从 200 提升至 800，系统可用性达到 99.9%」，使用具体数据量化成果",
+      "priority": "high"
+    },
+    {
+      "section": "技能列表",
+      "original_text": "熟悉 Java、Python、Spring、MySQL、Redis、Docker",
+      "issue": "技能罗列平铺直叙，没有突出精通程度",
+      "suggestion": "按熟练度分层展示，将最擅长的技能前置，如「精通：Java、Spring Boot、MySQL；熟悉：Python、Redis；了解：Docker、K8s」",
+      "priority": "medium"
+    }
+  ],
+  "position_match": {
+    "matched": ["Java 开发经验", "Spring 框架", "数据库设计"],
+    "missing": ["微服务架构经验", "容器化部署经验", "团队管理经验"],
+    "score": 60,
+    "advice": "建议补充微服务相关的项目经验，或通过学习 Docker/K8s 相关课程来弥补不足"
+  },
+  "summary": "## 简历评估总结\\n\\n您的简历整体结构清晰，技术栈描述较为完整。主要问题集中在：\\n\\n1. **缺少量化成果**：项目经历中几乎没有使用数据来支撑你的贡献\\n2. **技能描述过于宽泛**：建议按熟练度分层\\n3. **与目标岗位有差距**：缺少微服务和容器化相关经验\\n\\n重点关注高优先级的修改建议，它们对简历质量提升效果最明显。"
+}
+
+## 注意事项
+- 必须返回合法的 JSON，不要使用 Markdown 代码块包裹
+- 所有字段都必须填写，不能为空
+- dimensions 必须包含全部 5 个维度
+- suggestions 建议 3-8 条
+- strengths 和 weaknesses 各 3-5 条
+- 如果用户没有提供目标岗位，position_match 字段设为 null
+- summary 字段使用 Markdown 格式，结构清晰"""
+
 FORMAT_RESUME_PROMPT = """你是一个专业的简历格式化助手。用户会给你一段从 PDF/Word/图片中提取的简历原始文本，你需要将其整理为结构清晰、格式美观的 Markdown 格式。
 
 要求：
@@ -295,6 +371,65 @@ async def analyze_resume(resume_content: str, target_position: str = "") -> dict
         raise ValueError(f"AI 返回格式错误，解析失败：{str(e)}")
     except Exception as e:
         logger.error(f"Error analyzing resume with MiniMax: {e}")
+        raise
+
+
+async def review_resume(resume_content: str, target_position: str = "") -> dict:
+    user_message = f"目标岗位：{target_position}\n\n简历内容：\n{resume_content}" if target_position else f"简历内容：\n{resume_content}"
+
+    messages = [
+        {"role": "system", "content": RESUME_REVIEW_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+
+    try:
+        result = await call_minimax(messages)
+        cleaned = _clean_json_response(result)
+
+        parsed = json.loads(cleaned)
+
+        if not isinstance(parsed, dict):
+            raise ValueError("AI 返回格式错误，不是有效的 JSON 对象")
+
+        parsed.setdefault("overall_score", 60)
+        parsed.setdefault("dimensions", [])
+        parsed.setdefault("strengths", [])
+        parsed.setdefault("weaknesses", [])
+        parsed.setdefault("suggestions", [])
+        parsed.setdefault("position_match", None)
+        parsed.setdefault("summary", "")
+
+        score = parsed["overall_score"]
+        if not isinstance(score, int) or score < 0 or score > 100:
+            parsed["overall_score"] = max(0, min(100, int(score) if isinstance(score, (int, float)) else 60))
+
+        for dim in parsed["dimensions"]:
+            dim.setdefault("name", "")
+            dim.setdefault("score", 60)
+            dim.setdefault("comment", "")
+            d_score = dim["score"]
+            if not isinstance(d_score, int) or d_score < 0 or d_score > 100:
+                dim["score"] = max(0, min(100, int(d_score) if isinstance(d_score, (int, float)) else 60))
+
+        for sug in parsed["suggestions"]:
+            sug.setdefault("section", "")
+            sug.setdefault("original_text", "")
+            sug.setdefault("issue", "")
+            sug.setdefault("suggestion", "")
+            sug.setdefault("priority", "medium")
+
+        if parsed["position_match"] and isinstance(parsed["position_match"], dict):
+            parsed["position_match"].setdefault("matched", [])
+            parsed["position_match"].setdefault("missing", [])
+            parsed["position_match"].setdefault("score", 0)
+            parsed["position_match"].setdefault("advice", "")
+
+        return parsed
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse resume review response: {e}, response: {result}")
+        raise ValueError(f"AI 返回格式错误，解析失败：{str(e)}")
+    except Exception as e:
+        logger.error(f"Error reviewing resume with MiniMax: {e}")
         raise
 
 

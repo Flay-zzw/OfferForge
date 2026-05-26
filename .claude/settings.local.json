@@ -18,7 +18,8 @@
       "Bash(curl -s http://127.0.0.1:8000/openapi.json)",
       "Bash(python -c \"import json,sys; data=json.load\\(sys.stdin\\); paths=[p for p in data['paths'] if 'evaluations' in p or 'resume/analyze' in p]; print\\('\\\\n'.join\\(paths\\)\\)\")",
       "Bash(python -c ' *)",
-      "Bash(taskkill //F //IM uvicorn.exe)"
+      "Bash(taskkill //F //IM uvicorn.exe)",
+      "Bash(python -c \"from app.schemas import ResumeReviewResponse; from app.minimax import review_resume; print\\('Backend imports OK'\\)\")"
     ]
   }
 }

@@ -97,6 +97,38 @@ class ResumeAnalyzeResponse(BaseModel):
     overall_analysis: str
 
 
+# ---------- Resume Review ----------
+class DimensionScore(BaseModel):
+    name: str
+    score: int
+    comment: str
+
+
+class ResumeSuggestion(BaseModel):
+    section: str
+    original_text: str = ""
+    issue: str
+    suggestion: str
+    priority: str  # high / medium / low
+
+
+class PositionMatch(BaseModel):
+    matched: list[str]
+    missing: list[str]
+    score: int
+    advice: str
+
+
+class ResumeReviewResponse(BaseModel):
+    overall_score: int
+    dimensions: list[DimensionScore]
+    strengths: list[str]
+    weaknesses: list[str]
+    suggestions: list[ResumeSuggestion]
+    position_match: PositionMatch | None = None
+    summary: str
+
+
 # ---------- Mock Interview: Resume Extract ----------
 class ResumeExtractResponse(BaseModel):
     resume_markdown: str

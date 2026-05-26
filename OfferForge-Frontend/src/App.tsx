@@ -7,13 +7,14 @@ import QuestionsPage from './pages/QuestionsPage';
 import ParsePage from './pages/ParsePage';
 import MockInterviewPage from './pages/MockInterviewPage';
 import ResumeAnalyzePage from './pages/ResumeAnalyzePage';
+import ResumeReviewPage from './pages/ResumeReviewPage';
 import ProgressPage from './pages/ProgressPage';
 import AuthPage from './pages/AuthPage';
 import './styles/global.css';
 
-type Tab = 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'progress';
+type Tab = 'chat' | 'questions' | 'parse' | 'mock-interview' | 'resume-analyze' | 'resume-review' | 'progress';
 
-const RESTRICTED_TABS: Tab[] = ['chat', 'parse', 'mock-interview', 'resume-analyze', 'progress'];
+const RESTRICTED_TABS: Tab[] = ['chat', 'parse', 'mock-interview', 'resume-analyze', 'resume-review', 'progress'];
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('chat');
@@ -60,6 +61,8 @@ function AppContent() {
           <MockInterviewPage />
         ) : activeTab === 'resume-analyze' ? (
           <ResumeAnalyzePage />
+        ) : activeTab === 'resume-review' ? (
+          <ResumeReviewPage />
         ) : (
           <ProgressPage />
         )}
