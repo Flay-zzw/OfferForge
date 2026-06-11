@@ -470,11 +470,8 @@ async def interview_chat(
         api_role = "assistant" if role == "interviewer" else "user"
         messages.append({"role": api_role, "content": content})
 
-    # If skipping, inject a skip message to tell AI to move on
     if skip_action == "skip":
         messages.append({"role": "user", "content": "这道题我选择跳过，请换一道新的面试题（不要重复之前问过的话题）。"})
-    elif skip_action == "dont_know":
-        messages.append({"role": "user", "content": "这道题我不太清楚答案，请换一道新的面试题（不要重复之前问过的话题）。"})
 
     try:
         result = await call_minimax(messages)

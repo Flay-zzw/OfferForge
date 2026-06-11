@@ -119,12 +119,21 @@ export interface InterviewChatRequest {
   resume_text: string;
   conversation_history: InterviewMessage[];
   target_position?: string;
-  skip_action?: string;  // "", "skip", "dont_know"
+  skip_action?: string;  // "", "skip"
 }
 
 export interface InterviewChatResponse {
   message: string;
   is_complete: boolean;
+}
+
+// ---------- Mock Interview: Save Skipped Questions ----------
+export interface SaveSkippedQuestionsRequest {
+  questions: string[];
+}
+
+export interface SaveSkippedQuestionsResponse {
+  saved_count: number;
 }
 
 // ---------- Mock Interview: Evaluate ----------

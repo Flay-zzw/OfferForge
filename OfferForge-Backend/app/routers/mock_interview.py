@@ -14,6 +14,8 @@ from app.schemas import (
     InterviewChatResponse,
     InterviewEvaluateRequest,
     InterviewEvaluateResponse,
+    SaveSkippedQuestionsRequest,
+    SaveSkippedQuestionsResponse,
 )
 
 router = APIRouter()
@@ -62,7 +64,6 @@ async def resume_extract_endpoint(
 @router.post("/mock-interview/chat", response_model=InterviewChatResponse)
 async def interview_chat_endpoint(
     request: InterviewChatRequest,
-    db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     try:
@@ -70,28 +71,6 @@ async def interview_chat_endpoint(
             {"role": m.role, "content": m.content}
             for m in request.conversation_history
         ]
-
-        # If user clicked "我不知道", save question + AI-generated answer to question bank
-        if request.skip_action == "dont_know" and history_dicts:
-            last_interviewer_msg = None
-            for m in reversed(history_dicts):
-                if m.get("role") == "interviewer":
-                    last_interviewer_msg = m.get("content", "")
-                    break
-
-            if last_interviewer_msg:
-                try:
-                    answer = await generate_question_answer(last_interviewer_msg)
-                    db_question = Question(
-                        company="未知",
-                        difficulty="中等",
-                        question=last_interviewer_msg,
-                        answer=answer,
-                    )
-                    db.add(db_question)
-                    await db.commit()
-                except Exception:
-                    pass  # Don't block the interview flow if saving fails
 
         message, is_complete = await interview_chat(
             resume_text=request.resume_text,
@@ -147,3 +126,36 @@ async def interview_evaluate_endpoint(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"面试评估失败: {str(e)}")
+
+
+@router.post("/mock-interview/skipped-questions", response_model=SaveSkippedQuestionsResponse)
+async def save_skipped_questions_endpoint(
+    request: SaveSkippedQuestionsRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """面试结束后，批量为跳过的题目生成参考答案并保存到题库。"""
+    if not request.questions:
+        return SaveSkippedQuestionsResponse(saved_count=0)
+
+    saved_count = 0
+    for question_text in request.questions:
+        if not question_text.strip():
+            continue
+        try:
+            answer = await generate_question_answer(question_text)
+            db_question = Question(
+                company="未知",
+                difficulty="中等",
+                question=question_text,
+                answer=answer,
+            )
+            db.add(db_question)
+            saved_count += 1
+        except Exception:
+            pass  # Skip individual failures, continue with remaining questions
+
+    if saved_count > 0:
+        await db.commit()
+
+    return SaveSkippedQuestionsResponse(saved_count=saved_count)

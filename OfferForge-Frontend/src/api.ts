@@ -1,4 +1,4 @@
-import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse, ResumeReviewResponse, ResumeExtractResponse, InterviewChatRequest, InterviewChatResponse, InterviewEvaluateRequest, InterviewEvaluateResponse, LoginRequest, RegisterRequest, TokenResponse, UserInfo, EvaluationListItem, EvaluationDetail, EvaluationStats, StudyPlan } from './types';
+import type { ChatRequest, ChatResponse, InterviewParseRequest, InterviewParseResponse, Question, ResumeAnalyzeResponse, ResumeReviewResponse, ResumeExtractResponse, InterviewChatRequest, InterviewChatResponse, InterviewEvaluateRequest, InterviewEvaluateResponse, SaveSkippedQuestionsRequest, SaveSkippedQuestionsResponse, LoginRequest, RegisterRequest, TokenResponse, UserInfo, EvaluationListItem, EvaluationDetail, EvaluationStats, StudyPlan } from './types';
 
 const API_BASE = '/api';
 
@@ -117,6 +117,12 @@ export const api = {
 
   evaluateInterview: (data: InterviewEvaluateRequest) =>
     fetchAPI<InterviewEvaluateResponse>('/mock-interview/evaluate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  saveSkippedQuestions: (data: SaveSkippedQuestionsRequest) =>
+    fetchAPI<SaveSkippedQuestionsResponse>('/mock-interview/skipped-questions', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

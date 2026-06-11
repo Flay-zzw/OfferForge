@@ -64,6 +64,7 @@ export default function MockInterviewPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState<InterviewEvaluateResponse | null>(null);
+  const [skippedQuestions, setSkippedQuestions] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -271,7 +272,7 @@ export default function MockInterviewPage() {
 
       if (res.is_complete) {
         setStep('evaluating');
-        handleEvaluate([...updatedMessages, aiMsg]);
+        handleEvaluate([...updatedMessages, aiMsg], skippedQuestions);
       }
     } catch (err) {
       const errMsg: InterviewMessage = {
@@ -288,15 +289,20 @@ export default function MockInterviewPage() {
   // ---------- Step 3 → 4: End interview & evaluate ----------
   const handleEndInterview = () => {
     setStep('evaluating');
-    handleEvaluate(messages);
+    handleEvaluate(messages, skippedQuestions);
   };
 
-  // ---------- Step 3: Skip / Don't know ----------
-  const handleSkip = async (action: 'skip' | 'dont_know') => {
+  // ---------- Step 3: Skip ----------
+  const handleSkip = async () => {
     if (loading) return;
 
-    const label = action === 'skip' ? '跳过此题' : '我不知道';
-    const actionMsg: InterviewMessage = { role: 'user', content: label };
+    // Capture the last interviewer message as the skipped question
+    const lastInterviewerMsg = [...messages].reverse().find(m => m.role === 'interviewer');
+    if (lastInterviewerMsg) {
+      setSkippedQuestions(prev => [...prev, lastInterviewerMsg.content]);
+    }
+
+    const actionMsg: InterviewMessage = { role: 'user', content: '跳过此题' };
     const updatedMessages = [...messages, actionMsg];
     setMessages(updatedMessages);
     setLoading(true);
@@ -307,7 +313,7 @@ export default function MockInterviewPage() {
         resume_text: resumeRaw,
         conversation_history: history,
         target_position: targetPosition || undefined,
-        skip_action: action === 'skip' ? 'skip' : 'dont_know',
+        skip_action: 'skip',
       });
 
       const aiMsg: InterviewMessage = { role: 'interviewer', content: res.message };
@@ -315,7 +321,10 @@ export default function MockInterviewPage() {
 
       if (res.is_complete) {
         setStep('evaluating');
-        handleEvaluate([...updatedMessages, aiMsg]);
+        const pendingSkipped = lastInterviewerMsg
+          ? [...skippedQuestions, lastInterviewerMsg.content]
+          : skippedQuestions;
+        handleEvaluate([...updatedMessages, aiMsg], pendingSkipped);
       }
     } catch (err) {
       const errMsg: InterviewMessage = {
@@ -329,7 +338,7 @@ export default function MockInterviewPage() {
     }
   };
 
-  const handleEvaluate = async (msgs: InterviewMessage[]) => {
+  const handleEvaluate = async (msgs: InterviewMessage[], pendingSkipped: string[]) => {
     try {
       const history = msgs.map(m => ({ role: m.role, content: m.content }));
       const result = await api.evaluateInterview({
@@ -339,6 +348,13 @@ export default function MockInterviewPage() {
       });
       setEvaluation(result);
       setStep('completed');
+
+      // Batch save skipped questions after evaluation
+      if (pendingSkipped.length > 0) {
+        api.saveSkippedQuestions({ questions: pendingSkipped }).catch(() => {
+          // Silent fail — don't block the results display
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '评估失败');
       setStep('interviewing'); // allow retry
@@ -355,6 +371,7 @@ export default function MockInterviewPage() {
     setInput('');
     setEvaluation(null);
     setError('');
+    setSkippedQuestions([]);
     setTargetPosition('');
   };
 
@@ -552,13 +569,10 @@ export default function MockInterviewPage() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Skip action buttons */}
+              {/* Skip action button */}
               {!loading && messages.length > 0 && messages[messages.length - 1].role === 'interviewer' && (
                 <div style={styles.skipButtonsRow}>
-                  <button style={styles.skipDontKnowBtn} onClick={() => handleSkip('dont_know')}>
-                    我不知道
-                  </button>
-                  <button style={styles.skipBtn} onClick={() => handleSkip('skip')}>
+                  <button style={styles.skipBtn} onClick={() => handleSkip()}>
                     跳过
                   </button>
                 </div>
@@ -947,11 +961,6 @@ const styles: Record<string, React.CSSProperties> = {
   skipBtn: {
     padding: '6px 20px', border: '1px solid var(--border-primary)', borderRadius: '8px',
     background: 'var(--bg-secondary)', color: 'var(--text-secondary)',
-    fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all var(--transition-fast)',
-  },
-  skipDontKnowBtn: {
-    padding: '6px 20px', border: '1px solid var(--warning)', borderRadius: '8px',
-    background: 'var(--warning-light)', color: 'var(--warning)',
     fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all var(--transition-fast)',
   },
 
