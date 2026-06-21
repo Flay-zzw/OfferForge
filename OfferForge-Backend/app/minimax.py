@@ -194,6 +194,121 @@ INTERVIEW_SYSTEM_PROMPT = """你是一个资深技术面试官，正在为候选
 
 现在开始面试。"""
 
+
+# ===== 按难度分级的面试官人设 =====
+# 五个难度：简单 / 中等 / 困难 / 噩梦 / 地狱，每个对应一位风格鲜明的面试官。
+# 所有 prompt 共享相同的位置参数 {target_position} / {resume_text} 与统一的结束信号约定。
+
+_INTERVIEW_PROMPT_COMMON_TAIL = """
+## 重要约束
+- 每次只问一个问题，不要一次性抛出多个问题
+- 不要在提问时替候选人回答
+- 用"你"称呼候选人
+- 不要输出任何标签或格式标记前缀
+- 面试结束时，消息中必须包含"面试结束"或"面试到此结束"作为明确结束信号
+
+## 输出格式
+直接输出你要说的话，不需要 JSON，不需要任何前后缀标记。
+
+目标岗位：{target_position}
+
+简历内容：
+{resume_text}
+
+现在开始面试。"""
+
+
+INTERVIEW_PROMPTS = {
+    "简单": """你是一位"温和鼓励型"面试官，正在为候选人进行一场**简单难度**的模拟面试。你的角色像一位耐心的导师，目的是让候选人建立信心、把基础答好。
+
+## 人设
+- 语气亲切、鼓励，像带新人的前辈
+- 你只问**基础题**：简历中技术栈的基本概念、常见用法、项目里做了什么
+- 候选人卡住时，你会主动给一点提示或换个更小的角度重新问
+- 不会故意刁难，不追问过于底层的原理
+
+## 面试流程
+1. 开场：简短友好的开场白（如"别紧张，我们就当聊天"），然后提第一个基础问题。
+2. 提问策略：覆盖技术基础、项目经验、行为面试，但都停留在入门到基础层面。
+3. 回答评估：
+   - 回答基本正确 → 简短肯定（如"嗯，没问题"），换一个新话题的简单题
+   - 回答不全或卡住 → 给提示或降低难度，引导候选人说出关键点，不要一直追问施压
+4. 面试时长：约 10-12 次交流回合即可结束，结束时说"面试结束"并给一两句鼓励性总结。
+""" + _INTERVIEW_PROMPT_COMMON_TAIL,
+
+    "中等": """你是一位"标准专业型"面试官，正在为候选人进行一场**中等难度**的模拟面试，风格接近大厂一面的常规水平。
+
+## 人设
+- 语气专业、客观、不卑不亢
+- 题目难度与候选人简历体现的经验水平匹配：基础+适量进阶，覆盖原理与项目细节
+- 适度追问，考查理解深度，但不会无止境深挖
+
+## 面试流程
+1. 开场：简短开场白（如"面试开始，我们直接进入正题"），提出第一个问题。
+2. 提问策略：轮换覆盖技术基础、项目经验、系统设计、问题解决、行为面试。
+3. 回答评估：
+   - 回答浅显、有漏洞、含糊 → 追问同一话题，要求补充细节或澄清
+   - 回答扎实、有条理 → 简短评价一两句，换**不同话题**的新问题
+4. 面试时长：目标约 15 次交流回合（含追问）。接近尾声且当前回答完整时，说"面试结束"并给简短总结。
+""" + _INTERVIEW_PROMPT_COMMON_TAIL,
+
+    "困难": """你是一位"严格犀利型"面试官，正在为候选人进行一场**困难难度**的模拟面试，风格接近大厂二面 / 资深岗，会深挖细节、抓住漏洞不放。
+
+## 人设
+- 语气冷静、直接，有点严肃
+- 你问**进阶题**：底层原理、源码级理解、边界条件、为什么这样设计而不是那样
+- 候选人回答有含糊或漏洞时，你会精准指出并继续追问，要求给出具体方案与取舍
+- 不接受"大概""可能"这类模糊回答，要求明确的技术细节
+
+## 面试流程
+1. 开场：简短开场白，然后直接抛出一个有深度的开场问题。
+2. 提问策略：重点考查技术原理、项目架构与取舍、系统设计、复杂场景问题，行为面试为辅。
+3. 回答评估：
+   - 回答停留在表面 → 深挖一层（"为什么？""底层是怎么实现的？""换个场景会怎样？"）
+   - 回答有深度且自洽 → 简短认可，换一个**同样有难度**的新话题继续
+4. 面试时长：目标约 15-18 次交流回合。结束时说"面试结束"，总结中要点出关键不足。
+""" + _INTERVIEW_PROMPT_COMMON_TAIL,
+
+    "噩梦": """你是一位"高压压力型"面试官，正在为候选人进行一场**噩梦难度**的模拟面试。你会持续施压、连珠炮式追问、对回答挑刺，模拟高压面与压力测试。
+
+## 人设
+- 语气强势、咄咄逼人，会打断、质疑、反问
+- 你抛出**刁钻题**：极端场景、容量瓶颈、故障与一致性、被面试官故意质疑正确答案
+- 候选人答对也会被追问"如果再极端一点呢""有没有更优解""代价是什么"
+- 你会质疑候选人的方案，迫使其在压力下自证、权衡、修正
+
+## 面试流程
+1. 开场：直接进入正题，抛出一个有压迫感的开场问题（如大规模、高并发、故障场景）。
+2. 提问策略：聚焦系统设计、容量与瓶颈、分布式一致性、故障容灾、技术选型的代价权衡，辅以犀利的行为压力题。
+3. 回答评估：
+   - 几乎始终追问：质疑方案、追问边界、要求量化（QPS、延迟、容量）、要求对比备选方案
+   - 候选人在压力下仍能自洽论证 → 才认可并推进，但仍保持高压节奏
+4. 面试时长：目标约 18-20 次交流回合。结束时说"面试结束"，总结犀利、直击要害。
+""" + _INTERVIEW_PROMPT_COMMON_TAIL,
+
+    "地狱": """你是一位"地狱级"面试官，正在为候选人进行一场**地狱难度**的模拟面试。你代表技术天花板级别的拷问，融合资深架构师 + 原理狂魔 + 系统设计魔鬼的极限考查。
+
+## 人设
+- 语气冷峻、几乎不留情面，问题密度极高
+- 你只问**天花板级问题**：从底层原理到架构设计到工程取舍到线上事故复盘，连环纵深
+- 一个话题可以连续追问 4-6 层，直到候选人答不上来再换方向
+- 考查候选人在知识盲区、矛盾约束、不可能三角面前的思考方式，而非标准答案
+
+## 面试流程
+1. 开场：开门见山，抛出一个需要多层思考的复杂开场问题（系统设计或原理深挖）。
+2. 提问策略：系统设计 + 底层原理 + 工程权衡 + 极端场景 + 事故复盘，密度拉满，几乎题题是难题。
+3. 回答评估：
+   - 持续纵深追问：每层"为什么""代价是什么""换成 XX 量级呢""线上挂了你怎么办"
+   - 候选人触及盲区时，考查其能否诚实承认、给出合理推断与排查思路，而非强行编造
+4. 面试时长：目标约 18-22 次交流回合。结束时说"面试结束"，总结直接、不留情面，明确指出与顶尖水平的差距。
+""" + _INTERVIEW_PROMPT_COMMON_TAIL,
+}
+
+
+def _get_interview_prompt(difficulty: str) -> str:
+    """根据难度返回对应的面试官人设 prompt，未知难度回退到中等。"""
+    return INTERVIEW_PROMPTS.get(difficulty, INTERVIEW_PROMPTS["中等"])
+
 EVALUATION_PROMPT = """你是一位资深面试评估专家。你需要根据候选人的简历和完整的面试对话记录，对候选人的面试表现进行全面评估。
 
 ## 评估维度
@@ -245,7 +360,7 @@ async def call_minimax(messages: list[dict]) -> str:
         "Content-Type": "application/json",
     }
     payload = {
-        "model": "MiniMax-M2.7",
+        "model": "MiniMax-M3",
         "messages": messages,
         "temperature": 0.7,
         "max_tokens": 4096,
@@ -286,6 +401,74 @@ def _clean_json_response(result: str) -> str:
     return cleaned.strip()
 
 
+def _repair_json_string_literals(text: str) -> str:
+    """Best-effort repair of LLM JSON that contains unescaped control chars
+    inside string values.
+
+    LLMs frequently emit real newlines/tabs inside JSON string values instead
+    of the escaped ``\\n`` / ``\\t`` sequences, which makes ``json.loads`` fail
+    with errors like "Expecting ',' delimiter". We walk the text char by char
+    tracking whether we are inside a string and escape any control character
+    that appears inside a string literal. We also leave already-escaped
+    sequences (``\\n`` etc.) untouched.
+    """
+    out = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if not in_string:
+            out.append(ch)
+            if ch == '"':
+                in_string = True
+            continue
+
+        if escaped:
+            # Previous char was a backslash: pass this one through verbatim.
+            out.append(ch)
+            escaped = False
+            continue
+
+        if ch == "\\":
+            out.append(ch)
+            escaped = True
+            continue
+
+        if ch == '"':
+            out.append(ch)
+            in_string = False
+            continue
+
+        if ch == "\n":
+            out.append("\\n")
+            continue
+        if ch == "\r":
+            out.append("\\r")
+            continue
+        if ch == "\t":
+            out.append("\\t")
+            continue
+
+        out.append(ch)
+    return "".join(out)
+
+
+def _safe_json_loads(text: str) -> object:
+    """Parse JSON from an LLM response, tolerating common formatting errors.
+
+    Tries a strict ``json.loads`` first; on failure, repairs unescaped control
+    characters inside string literals and retries. Raises ``json.JSONDecodeError``
+    with the original message if repair still fails.
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as original_err:
+        try:
+            repaired = _repair_json_string_literals(text)
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            raise original_err
+
+
 async def parse_interview(content: str, company: str) -> list[dict]:
     user_message = f"公司：{company}\n\n面经内容：\n{content}" if company else f"面经内容：\n{content}"
 
@@ -298,7 +481,7 @@ async def parse_interview(content: str, company: str) -> list[dict]:
         result = await call_minimax(messages)
         cleaned = _clean_json_response(result)
 
-        parsed = json.loads(cleaned)
+        parsed = _safe_json_loads(cleaned)
         if not isinstance(parsed, list):
             parsed = [parsed]
 
@@ -348,7 +531,7 @@ async def analyze_resume(resume_content: str, target_position: str = "") -> dict
         result = await call_minimax(messages)
         cleaned = _clean_json_response(result)
 
-        parsed = json.loads(cleaned)
+        parsed = _safe_json_loads(cleaned)
 
         if not isinstance(parsed, dict):
             parsed = {"predicted_questions": [] if not isinstance(parsed, list) else parsed, "overall_analysis": ""}
@@ -386,7 +569,7 @@ async def review_resume(resume_content: str, target_position: str = "") -> dict:
         result = await call_minimax(messages)
         cleaned = _clean_json_response(result)
 
-        parsed = json.loads(cleaned)
+        parsed = _safe_json_loads(cleaned)
 
         if not isinstance(parsed, dict):
             raise ValueError("AI 返回格式错误，不是有效的 JSON 对象")
@@ -452,9 +635,13 @@ async def interview_chat(
     history: list[dict],
     target_position: str = "",
     skip_action: str = "",
+    difficulty: str = "中等",
 ) -> tuple[str, bool]:
-    """进行一次面试对话。返回 (AI消息, 是否结束)。"""
-    system_prompt = INTERVIEW_SYSTEM_PROMPT.format(
+    """进行一次面试对话。返回 (AI消息, 是否结束)。
+
+    difficulty 决定使用哪一位面试官人设（简单/中等/困难/噩梦/地狱）。
+    """
+    system_prompt = _get_interview_prompt(difficulty).format(
         target_position=target_position or "未指定",
         resume_text=resume_text,
     )
@@ -555,7 +742,7 @@ async def generate_study_plan(evaluations_summary: str) -> dict:
     try:
         result = await call_minimax(messages)
         cleaned = _clean_json_response(result)
-        parsed = json.loads(cleaned)
+        parsed = _safe_json_loads(cleaned)
 
         if not isinstance(parsed, dict):
             raise ValueError("AI 返回格式错误，不是有效的 JSON 对象")
@@ -594,11 +781,7 @@ async def evaluate_interview(
         {"role": "user", "content": user_message},
     ]
 
-    try:
-        result = await call_minimax(messages)
-        cleaned = _clean_json_response(result)
-        parsed = json.loads(cleaned)
-
+    def _normalize(parsed: object) -> dict:
         if not isinstance(parsed, dict):
             raise ValueError("AI 返回格式错误，不是有效的 JSON 对象")
 
@@ -614,7 +797,33 @@ async def evaluate_interview(
             parsed["overall_score"] = max(0, min(100, int(score) if isinstance(score, (int, float)) else 60))
 
         return parsed
-    except json.JSONDecodeError as e:
+
+    try:
+        result = await call_minimax(messages)
+        try:
+            return _normalize(_safe_json_loads(_clean_json_response(result)))
+        except (json.JSONDecodeError, ValueError) as e:
+            # First attempt failed to parse — ask the model once more for pure
+            # JSON and retry. This is the core end-of-interview summary, so a
+            # single self-correcting retry is worth the extra round-trip.
+            logger.warning(f"First evaluation parse failed ({e}); retrying with a strict-JSON prompt.")
+            retry_messages = messages + [
+                {
+                    "role": "assistant",
+                    "content": result,
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "你上一次返回的内容不是合法的 JSON（字符串值中包含了未转义的换行或引号），解析失败。"
+                        "请严格只输出一个合法的 JSON 对象，不要使用 Markdown 代码块，"
+                        "并确保所有字符串值中的换行使用 \\n 转义、引号使用 \\\" 转义。"
+                    ),
+                },
+            ]
+            result = await call_minimax(retry_messages)
+            return _normalize(_safe_json_loads(_clean_json_response(result)))
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"Failed to parse evaluation response: {e}, response: {result}")
         raise ValueError(f"AI 评估返回格式错误：{str(e)}")
     except Exception as e:

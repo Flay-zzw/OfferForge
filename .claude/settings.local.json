@@ -19,7 +19,26 @@
       "Bash(python -c \"import json,sys; data=json.load\\(sys.stdin\\); paths=[p for p in data['paths'] if 'evaluations' in p or 'resume/analyze' in p]; print\\('\\\\n'.join\\(paths\\)\\)\")",
       "Bash(python -c ' *)",
       "Bash(taskkill //F //IM uvicorn.exe)",
-      "Bash(python -c \"from app.schemas import ResumeReviewResponse; from app.minimax import review_resume; print\\('Backend imports OK'\\)\")"
+      "Bash(python -c \"from app.schemas import ResumeReviewResponse; from app.minimax import review_resume; print\\('Backend imports OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/minimax.py',encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(python _test_safe_json.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python _test_safe_json.py)",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f,encoding='utf-8'\\).read\\(\\)\\) for f in ['app/minimax.py','app/schemas.py','app/routers/mock_interview.py']]; print\\('syntax OK'\\)\")",
+      "Bash(python -c \"from app.minimax import INTERVIEW_PROMPTS, _get_interview_prompt; [p.format\\(target_position='x', resume_text='y'\\) for p in INTERVIEW_PROMPTS.values\\(\\)]; print\\('prompts OK, keys:', list\\(INTERVIEW_PROMPTS.keys\\(\\)\\)\\)\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(npm run *)",
+      "Bash(PYTHONIOENCODING=utf-8 uvicorn app.main:app --port 8000)",
+      "Bash(curl -s http://localhost:8000/api/health)",
+      "Bash(curl -s http://localhost:8000/openapi.json)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); s=d['components']['schemas']['InterviewChatRequest']['properties']; print\\('InterviewChatRequest.difficulty:', s.get\\('difficulty'\\)\\); s2=d['components']['schemas']['SaveSkippedQuestionsRequest']['properties']; print\\('SaveSkipped.difficulty:', s2.get\\('difficulty'\\)\\)\")",
+      "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(venv/Scripts/python.exe -c \"import bcrypt, passlib; print\\('bcrypt', bcrypt.__version__\\); print\\('passlib', passlib.__version__\\)\")",
+      "Bash(venv/Scripts/pip.exe install *)",
+      "Bash(venv/Scripts/python.exe -c ' *)",
+      "Bash(powershell -Command 'Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; Write-Output \"killed PID $_\" }')",
+      "Bash(PYTHONIOENCODING=utf-8 venv/Scripts/python.exe -c ' *)",
+      "Bash(powershell -Command 'Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }')"
     ]
   }
 }

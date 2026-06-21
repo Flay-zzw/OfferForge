@@ -146,6 +146,7 @@ class InterviewChatRequest(BaseModel):
     conversation_history: list[InterviewMessage] = []
     target_position: str = ""
     skip_action: str = ""  # "", "skip"
+    difficulty: str = "中等"  # 简单 / 中等 / 困难 / 噩梦 / 地狱
 
 
 class InterviewChatResponse(BaseModel):
@@ -156,6 +157,7 @@ class InterviewChatResponse(BaseModel):
 # ---------- Mock Interview: Save Skipped Questions ----------
 class SaveSkippedQuestionsRequest(BaseModel):
     questions: list[str]
+    difficulty: str = "中等"  # 跳过的题按此难度入库
 
 
 class SaveSkippedQuestionsResponse(BaseModel):

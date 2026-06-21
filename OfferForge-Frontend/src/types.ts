@@ -115,11 +115,15 @@ export interface InterviewMessage {
   content: string;
 }
 
+// 模拟面试难度，对应后端 5 位面试官人设
+export type Difficulty = '简单' | '中等' | '困难' | '噩梦' | '地狱';
+
 export interface InterviewChatRequest {
   resume_text: string;
   conversation_history: InterviewMessage[];
   target_position?: string;
   skip_action?: string;  // "", "skip"
+  difficulty?: Difficulty;
 }
 
 export interface InterviewChatResponse {
@@ -130,6 +134,7 @@ export interface InterviewChatResponse {
 // ---------- Mock Interview: Save Skipped Questions ----------
 export interface SaveSkippedQuestionsRequest {
   questions: string[];
+  difficulty?: Difficulty;
 }
 
 export interface SaveSkippedQuestionsResponse {

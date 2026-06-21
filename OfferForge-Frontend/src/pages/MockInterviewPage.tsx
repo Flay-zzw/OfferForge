@@ -24,18 +24,34 @@ declare global {
 }
 import ReactMarkdown from 'react-markdown';
 import { api } from '../api';
-import type { InterviewMessage, InterviewEvaluateResponse } from '../types';
+import type { InterviewMessage, InterviewEvaluateResponse, Difficulty } from '../types';
 
-type Step = 'upload' | 'review' | 'interviewing' | 'evaluating' | 'completed';
+type Step = 'upload' | 'review' | 'difficulty' | 'interviewing' | 'evaluating' | 'completed';
 
 const ACCEPTED_TYPES = '.pdf,.docx,.doc,.png,.jpg,.jpeg,.bmp,.tiff,.tif,.webp';
 const MAX_SIZE = 20 * 1024 * 1024; // 20MB
 const STEPS = [
   { key: 'upload' as Step, label: '上传简历' },
   { key: 'review' as Step, label: '确认内容' },
+  { key: 'difficulty' as Step, label: '选择难度' },
   { key: 'interviewing' as Step, label: '模拟面试' },
   { key: 'evaluating' as Step, label: '面试评估' },
   { key: 'completed' as Step, label: '评估结果' },
+];
+
+// 五档难度，对应后端五位面试官人设
+const DIFFICULTY_OPTIONS: {
+  value: Difficulty;
+  label: string;
+  desc: string;
+  icon: string;
+  color: string;
+}[] = [
+  { value: '简单', label: '简单', desc: '温和鼓励型 · 只问基础，会主动给提示，建立信心', icon: '🌱', color: 'var(--success)' },
+  { value: '中等', label: '中等', desc: '标准专业型 · 大厂一面常规难度，适度追问', icon: '📘', color: 'var(--accent-primary)' },
+  { value: '困难', label: '困难', desc: '严格犀利型 · 深挖底层原理与边界，抓漏洞不放', icon: '🔥', color: 'var(--warning)' },
+  { value: '噩梦', label: '噩梦', desc: '高压压力型 · 连珠炮追问、故意质疑，压力测试', icon: '⚡', color: 'var(--danger)' },
+  { value: '地狱', label: '地狱', desc: '天花板级 · 系统设计+原理+事故连环纵深拷问', icon: '💀', color: '#a855f7' },
 ];
 
 function formatSize(bytes: number) {
@@ -65,6 +81,9 @@ export default function MockInterviewPage() {
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState<InterviewEvaluateResponse | null>(null);
   const [skippedQuestions, setSkippedQuestions] = useState<string[]>([]);
+  const [difficulty, setDifficulty] = useState<Difficulty>('中等');
+  const [savedSkippedCount, setSavedSkippedCount] = useState<number | null>(null);
+  const [saveSkippedError, setSaveSkippedError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -226,28 +245,32 @@ export default function MockInterviewPage() {
     }
   };
 
-  // ---------- Step 2 → 3: Start interview ----------
+  // ---------- Start interview ----------
   const handleStartInterview = async () => {
     setStep('interviewing');
     setMessages([]);
+    setError('');
+    setSavedSkippedCount(null);
+    setSaveSkippedError('');
     setLoading(true);
     try {
       const res = await api.interviewChat({
         resume_text: resumeRaw,
         conversation_history: [],
         target_position: targetPosition || undefined,
+        difficulty,
       });
       const firstMsg: InterviewMessage = { role: 'interviewer', content: res.message };
       setMessages([firstMsg]);
     } catch (err) {
       setError(err instanceof Error ? err.message : '面试启动失败');
-      setStep('review');
+      setStep('difficulty');
     } finally {
       setLoading(false);
     }
   };
 
-  // ---------- Step 3: Send answer ----------
+  // ---------- Send answer ----------
   const handleSendAnswer = async () => {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
@@ -265,6 +288,7 @@ export default function MockInterviewPage() {
         resume_text: resumeRaw,
         conversation_history: history,
         target_position: targetPosition || undefined,
+        difficulty,
       });
 
       const aiMsg: InterviewMessage = { role: 'interviewer', content: res.message };
@@ -314,6 +338,7 @@ export default function MockInterviewPage() {
         conversation_history: history,
         target_position: targetPosition || undefined,
         skip_action: 'skip',
+        difficulty,
       });
 
       const aiMsg: InterviewMessage = { role: 'interviewer', content: res.message };
@@ -339,6 +364,8 @@ export default function MockInterviewPage() {
   };
 
   const handleEvaluate = async (msgs: InterviewMessage[], pendingSkipped: string[]) => {
+    setSavedSkippedCount(null);
+    setSaveSkippedError('');
     try {
       const history = msgs.map(m => ({ role: m.role, content: m.content }));
       const result = await api.evaluateInterview({
@@ -349,11 +376,20 @@ export default function MockInterviewPage() {
       setEvaluation(result);
       setStep('completed');
 
-      // Batch save skipped questions after evaluation
+      // 将跳过的题目入库（不再静默失败）。这一步可能较慢——后端会逐题生成参考答案，
+      // 因此放在评估结果展示之后异步执行，但会记录成功/失败并反馈给用户。
       if (pendingSkipped.length > 0) {
-        api.saveSkippedQuestions({ questions: pendingSkipped }).catch(() => {
-          // Silent fail — don't block the results display
-        });
+        try {
+          const saveRes = await api.saveSkippedQuestions({
+            questions: pendingSkipped,
+            difficulty,
+          });
+          setSavedSkippedCount(saveRes.saved_count);
+        } catch (e) {
+          setSaveSkippedError(e instanceof Error ? e.message : '题目入库失败');
+        }
+      } else {
+        setSavedSkippedCount(0);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '评估失败');
@@ -373,6 +409,9 @@ export default function MockInterviewPage() {
     setError('');
     setSkippedQuestions([]);
     setTargetPosition('');
+    setDifficulty('中等');
+    setSavedSkippedCount(null);
+    setSaveSkippedError('');
   };
 
   // ---------- Derived ----------
@@ -506,10 +545,57 @@ export default function MockInterviewPage() {
                 <button style={styles.secondaryBtn} onClick={() => { setStep('upload'); setError(''); }}>
                   返回重新上传
                 </button>
-                <button style={{ ...styles.primaryBtn, ...styles.primaryBtnActive }} onClick={handleStartInterview} disabled={loading}>
-                  {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />启动中...</> : <><Sparkles size={18} />开始面试</>}
+                <button style={{ ...styles.primaryBtn, ...styles.primaryBtnActive }} onClick={() => setStep('difficulty')}>
+                  <><Sparkles size={18} />下一步：选择难度</>
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* ========== STEP: DIFFICULTY ========== */}
+          {step === 'difficulty' && (
+            <div style={styles.inputSection}>
+              <div style={{ ...styles.reviewHeader, marginBottom: 8 }}>
+                <Target size={20} color="var(--accent-primary)" />
+                <h2 style={styles.reviewTitle}>选择面试难度</h2>
+              </div>
+              <p style={styles.reviewHint}>不同难度对应不同风格的 AI 面试官，请根据自身情况选择。难度越高，追问越犀利、问题越深。</p>
+
+              <div style={styles.difficultyGrid}>
+                {DIFFICULTY_OPTIONS.map(opt => (
+                  <div
+                    key={opt.value}
+                    style={{
+                      ...styles.difficultyCard,
+                      ...(difficulty === opt.value ? styles.difficultyCardActive : {}),
+                      ...(difficulty === opt.value ? { borderColor: opt.color } : {}),
+                    }}
+                    onClick={() => setDifficulty(opt.value)}
+                  >
+                    <div style={{ ...styles.difficultyIcon, color: opt.color }}>{opt.icon}</div>
+                    <div style={styles.difficultyBody}>
+                      <div style={{ ...styles.difficultyLabel, ...(difficulty === opt.value ? { color: opt.color } : {}) }}>
+                        {opt.label}
+                        {difficulty === opt.value && <CheckCircle size={16} style={{ marginLeft: 6, verticalAlign: 'middle' }} />}
+                      </div>
+                      <div style={styles.difficultyDesc}>{opt.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={styles.reviewActions}>
+                <button style={styles.secondaryBtn} onClick={() => setStep('review')}>
+                  返回
+                </button>
+                <button style={{ ...styles.primaryBtn, ...styles.primaryBtnActive }} onClick={handleStartInterview} disabled={loading}>
+                  {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />启动中...</> : <><Sparkles size={18} />开始 {difficulty} 面试</>}
+                </button>
+              </div>
+
+              {error && (
+                <div style={styles.errorBox}><AlertCircle size={16} /><p style={styles.errorText}>{error}</p></div>
+              )}
             </div>
           )}
 
@@ -688,6 +774,31 @@ export default function MockInterviewPage() {
                   <ReactMarkdown>{evaluation.detailed_feedback}</ReactMarkdown>
                 </div>
               </div>
+
+              {/* Skipped questions saved to question bank */}
+              {skippedQuestions.length > 0 && (
+                <div style={styles.resultCard}>
+                  <div style={styles.resultCardHeader}>
+                    <BookOpen size={18} color="var(--accent-primary)" />
+                    <h3 style={{ ...styles.resultCardTitle, color: 'var(--accent-primary)' }}>跳过题目入库</h3>
+                  </div>
+                  {saveSkippedError ? (
+                    <div style={styles.errorBox}><AlertCircle size={16} /><p style={styles.errorText}>{saveSkippedError}</p></div>
+                  ) : savedSkippedCount === null ? (
+                    <p style={styles.resultItem}>
+                      <Loader2 size={14} style={{ animation: 'spin 1s linear infinite', verticalAlign: 'middle', marginRight: 6 }} />
+                      正在为 {skippedQuestions.length} 道跳过的题目生成参考答案并入库...
+                    </p>
+                  ) : savedSkippedCount === 0 ? (
+                    <p style={styles.resultItem}>本次没有跳过的题目。</p>
+                  ) : (
+                    <p style={styles.resultItem}>
+                      已成功将 <strong>{savedSkippedCount}</strong> 道你跳过的题目收录到题库
+                      （归类为「其他」、难度「{difficulty}」），并生成了参考答案，可在题库中复习。
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Reset */}
               <div style={styles.resetSection}>
@@ -882,6 +993,24 @@ const styles: Record<string, React.CSSProperties> = {
   reviewActions: {
     display: 'flex', justifyContent: 'flex-end', gap: 12,
   },
+
+  // Difficulty step
+  difficultyGrid: {
+    display: 'grid', gridTemplateColumns: '1fr', gap: 12, margin: '20px 0',
+  },
+  difficultyCard: {
+    display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px',
+    borderRadius: '14px', border: '2px solid var(--border-primary)',
+    background: 'var(--bg-secondary)', cursor: 'pointer', transition: 'all .15s ease',
+  },
+  difficultyCardActive: {
+    background: 'var(--bg-tertiary)',
+    boxShadow: '0 0 0 1px var(--accent-primary) inset',
+  },
+  difficultyIcon: { fontSize: 28, lineHeight: 1, width: 36, textAlign: 'center', flexShrink: 0 },
+  difficultyBody: { flex: 1, minWidth: 0 },
+  difficultyLabel: { fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 },
+  difficultyDesc: { fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 },
 
   // Interview step
   interviewContainer: {

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,7 @@ from app.schemas import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/mock-interview/resume/extract", response_model=ResumeExtractResponse)
@@ -77,6 +79,7 @@ async def interview_chat_endpoint(
             history=history_dicts,
             target_position=request.target_position,
             skip_action=request.skip_action,
+            difficulty=request.difficulty,
         )
 
         return InterviewChatResponse(message=message, is_complete=is_complete)
@@ -134,10 +137,14 @@ async def save_skipped_questions_endpoint(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """面试结束后，批量为跳过的题目生成参考答案并保存到题库。"""
+    """面试结束后，批量为跳过的题目生成参考答案并保存到题库。
+
+    跳过的题统一归类：company 标记为"其他"，difficulty 沿用本次面试所选难度。
+    """
     if not request.questions:
         return SaveSkippedQuestionsResponse(saved_count=0)
 
+    difficulty = request.difficulty or "中等"
     saved_count = 0
     for question_text in request.questions:
         if not question_text.strip():
@@ -145,15 +152,17 @@ async def save_skipped_questions_endpoint(
         try:
             answer = await generate_question_answer(question_text)
             db_question = Question(
-                company="未知",
-                difficulty="中等",
-                question=question_text,
+                company="其他",
+                difficulty=difficulty,
+                question=question_text.strip(),
                 answer=answer,
             )
             db.add(db_question)
             saved_count += 1
-        except Exception:
-            pass  # Skip individual failures, continue with remaining questions
+        except Exception as e:
+            # 单题失败不影响其余题目入库，记录后继续
+            logger.warning("Failed to save a skipped question: %s", e)
+            continue
 
     if saved_count > 0:
         await db.commit()
