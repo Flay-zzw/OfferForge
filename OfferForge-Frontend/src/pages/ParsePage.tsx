@@ -117,7 +117,14 @@ AI会自动识别并拆分成独立的面试题目。`}
             {error && (
               <div style={styles.errorBox}>
                 <AlertCircle size={16} />
-                <p style={styles.errorText}>{error}</p>
+                <div>
+                  <p style={styles.errorText}>{error}</p>
+                  {error.includes('超时') && (
+                    <p style={{ ...styles.errorText, marginTop: 6, fontSize: 13 }}>
+                      提示：面经题目过多时 AI 生成参考答案耗时较长。建议分批粘贴（每次 10 题以内）后再解析。
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -84,8 +84,12 @@ async def interview_chat_endpoint(
 
         return InterviewChatResponse(message=message, is_complete=is_complete)
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"面试对话失败: {str(e)}")
+        detail = str(e).strip() or "AI 面试官暂时无法响应，请稍后重试"
+        logger.exception("Interview chat failed")
+        raise HTTPException(status_code=500, detail=f"面试对话失败: {detail}")
 
 
 @router.post("/mock-interview/evaluate", response_model=InterviewEvaluateResponse)
@@ -150,12 +154,12 @@ async def save_skipped_questions_endpoint(
         if not question_text.strip():
             continue
         try:
-            answer = await generate_question_answer(question_text)
+            result = await generate_question_answer(question_text)
             db_question = Question(
                 company="其他",
                 difficulty=difficulty,
-                question=question_text.strip(),
-                answer=answer,
+                question=result["question"].strip() or question_text.strip(),
+                answer=result.get("answer", ""),
             )
             db.add(db_question)
             saved_count += 1

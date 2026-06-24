@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +19,7 @@ from app.schemas import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/interviews/parse", response_model=InterviewParseResponse)
@@ -28,7 +31,9 @@ async def parse_interview_endpoint(
     try:
         parsed_questions = await parse_interview(request.content, request.company)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"MiniMax API 调用失败: {str(e)}")
+        detail = str(e).strip() or "AI 解析面经失败，请稍后重试或精简面经内容后再次提交"
+        logger.exception("Parse interview failed")
+        raise HTTPException(status_code=500, detail=detail)
 
     saved = []
     for q in parsed_questions:
@@ -107,4 +112,6 @@ async def chat_endpoint(
         reply = await chat_with_minimax(request.message, request.history)
         return ChatResponse(reply=reply)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"MiniMax API 调用失败: {str(e)}")
+        detail = str(e).strip() or "AI 助手暂时无法响应，请稍后重试"
+        logger.exception("Chat failed")
+        raise HTTPException(status_code=500, detail=detail)

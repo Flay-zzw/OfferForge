@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Loader2, Sparkles, Upload, FileText, X, File, Image, FileSpreadsheet, AlertCircle, Target, TrendingUp, ThumbsUp, ThumbsDown, FilePenLine, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../api';
+import Markdown from '../components/Markdown';
 import type { ResumeReviewResponse } from '../types';
 
 const ACCEPTED_TYPES = '.pdf,.docx,.doc,.png,.jpg,.jpeg,.bmp,.tiff,.tif,.webp';
@@ -348,7 +349,9 @@ export default function ResumeReviewPage() {
                 <FileText size={18} color="var(--accent-primary)" />
                 <h3 style={styles.sectionTitle}>改进总结</h3>
               </div>
-              <p style={styles.summaryText}>{result.summary}</p>
+              <div style={styles.summaryText}>
+                <Markdown>{result.summary}</Markdown>
+              </div>
             </div>
 
             <button style={styles.resetBtn} onClick={handleReset}>
@@ -817,11 +820,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   // Summary
   summaryText: {
-    fontSize: 14,
-    color: 'var(--text-secondary)',
-    lineHeight: 1.8,
     margin: 0,
-    whiteSpace: 'pre-wrap',
   },
   resetBtn: {
     display: 'flex',

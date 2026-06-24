@@ -44,6 +44,51 @@ const codeTheme: Record<string, React.CSSProperties> = {
   italic: { fontStyle: 'italic' },
 };
 
+const markdownComponents = {
+  h1: ({ children }: any) => <h1 style={{ ...markdownStyles.h1 }}>{children}</h1>,
+  h2: ({ children }: any) => <h2 style={{ ...markdownStyles.h2 }}>{children}</h2>,
+  h3: ({ children }: any) => <h3 style={{ ...markdownStyles.h3 }}>{children}</h3>,
+  p: ({ children }: any) => <p style={{ ...markdownStyles.p }}>{children}</p>,
+  ul: ({ children }: any) => <ul style={{ ...markdownStyles.ul }}>{children}</ul>,
+  ol: ({ children }: any) => <ol style={{ ...markdownStyles.ol }}>{children}</ol>,
+  li: ({ children }: any) => <li style={{ ...markdownStyles.li }}>{children}</li>,
+  blockquote: ({ children }: any) => <blockquote style={{ ...markdownStyles.blockquote }}>{children}</blockquote>,
+  strong: ({ children }: any) => <strong style={{ ...markdownStyles.strong }}>{children}</strong>,
+  em: ({ children }: any) => <em style={{ ...markdownStyles.em }}>{children}</em>,
+  code: ({ node, className, children, ...props }: any) => {
+    const match = /language-(\w+)/.exec(className || '');
+    const isInline = !match && !className;
+    return !isInline && match ? (
+      <SyntaxHighlighter
+        style={codeTheme as Record<string, React.CSSProperties>}
+        language={match[1]}
+        PreTag="div"
+        customStyle={{
+          margin: '1.2em 0',
+          borderRadius: '12px',
+          background: '#1e293b',
+        }}
+      >
+        {String(children).replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    ) : (
+      <code className={className} style={{ ...markdownStyles.inlineCode }} {...props}>
+        {children}
+      </code>
+    );
+  },
+  a: ({ href, children }: any) => (
+    <a
+      href={href}
+      style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+};
+
 export default function QuestionDetail({ question, onDelete }: Props) {
   const difficultyColor = (d: string) => {
     switch (d) {
@@ -128,42 +173,7 @@ export default function QuestionDetail({ question, onDelete }: Props) {
             题目
           </h3>
           <div style={styles.questionBox}>
-            <ReactMarkdown
-              components={{
-                h1: ({ children }) => <h1 style={{ ...markdownStyles.h1 }}>{children}</h1>,
-                h2: ({ children }) => <h2 style={{ ...markdownStyles.h2 }}>{children}</h2>,
-                h3: ({ children }) => <h3 style={{ ...markdownStyles.h3 }}>{children}</h3>,
-                p: ({ children }) => <p style={{ ...markdownStyles.p }}>{children}</p>,
-                ul: ({ children }) => <ul style={{ ...markdownStyles.ul }}>{children}</ul>,
-                ol: ({ children }) => <ol style={{ ...markdownStyles.ol }}>{children}</ol>,
-                li: ({ children }) => <li style={{ ...markdownStyles.li }}>{children}</li>,
-                blockquote: ({ children }) => <blockquote style={{ ...markdownStyles.blockquote }}>{children}</blockquote>,
-                strong: ({ children }) => <strong style={{ ...markdownStyles.strong }}>{children}</strong>,
-                em: ({ children }) => <em style={{ ...markdownStyles.em }}>{children}</em>,
-                code: ({ node, className, children, ...props }) => {
-                  const match = /language-(\w+)/.exec(className || '');
-                  const isInline = !match && !className;
-                  return !isInline && match ? (
-                    <SyntaxHighlighter
-                      style={codeTheme as Record<string, React.CSSProperties>}
-                      language={match[1]}
-                      PreTag="div"
-                      customStyle={{
-                        margin: '1.2em 0',
-                        borderRadius: '12px',
-                        background: '#1e293b',
-                      }}
-                    >
-                      {String(children).replace(/\n$/, '')}
-                    </SyntaxHighlighter>
-                  ) : (
-                    <code className={className} style={{ ...markdownStyles.inlineCode }} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-              }}
-            >
+            <ReactMarkdown components={markdownComponents}>
               {question.question}
             </ReactMarkdown>
           </div>
@@ -176,54 +186,7 @@ export default function QuestionDetail({ question, onDelete }: Props) {
           </h3>
           <div style={styles.answerBox}>
             {question.answer ? (
-              <ReactMarkdown
-                components={{
-                  h1: ({ children }) => <h1 style={{ ...markdownStyles.h1 }}>{children}</h1>,
-                  h2: ({ children }) => <h2 style={{ ...markdownStyles.h2 }}>{children}</h2>,
-                  h3: ({ children }) => <h3 style={{ ...markdownStyles.h3 }}>{children}</h3>,
-                  p: ({ children }) => <p style={{ ...markdownStyles.p }}>{children}</p>,
-                  ul: ({ children }) => <ul style={{ ...markdownStyles.ul }}>{children}</ul>,
-                  ol: ({ children }) => <ol style={{ ...markdownStyles.ol }}>{children}</ol>,
-                  li: ({ children }) => <li style={{ ...markdownStyles.li }}>{children}</li>,
-                  blockquote: ({ children }) => <blockquote style={{ ...markdownStyles.blockquote }}>{children}</blockquote>,
-                  strong: ({ children }) => <strong style={{ ...markdownStyles.strong }}>{children}</strong>,
-                  em: ({ children }) => <em style={{ ...markdownStyles.em }}>{children}</em>,
-                  code({ node, className, children, ...props }) {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const isInline = !match && !className;
-                    return !isInline && match ? (
-                      <SyntaxHighlighter
-                        style={codeTheme as Record<string, React.CSSProperties>}
-                        language={match[1]}
-                        PreTag="div"
-                        customStyle={{
-                          margin: '1.2em 0',
-                          borderRadius: '12px',
-                          background: '#1e293b',
-                        }}
-                      >
-                        {String(children).replace(/\n$/, '')}
-                      </SyntaxHighlighter>
-                    ) : (
-                      <code className={className} style={{ ...markdownStyles.inlineCode }} {...props}>
-                        {children}
-                      </code>
-                    );
-                  },
-                  a({ href, children }) {
-                    return (
-                      <a
-                        href={href}
-                        style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {children}
-                      </a>
-                    );
-                  },
-                }}
-              >
+              <ReactMarkdown components={markdownComponents}>
                 {question.answer}
               </ReactMarkdown>
             ) : (

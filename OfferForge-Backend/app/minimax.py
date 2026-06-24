@@ -1,11 +1,81 @@
+import asyncio
 import json
 import logging
+import re
 
 import httpx
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+async def _sleep(seconds: float) -> None:
+    """异步等待，用于 API 重试退避。"""
+    await asyncio.sleep(seconds)
+
+
+# ----- 答案 Markdown 后处理：自动给裸英文术语包反引号 -----
+# 模型对「所有英文术语都加反引号」执行不稳定，靠 prompt 压不住，这里做兜底。
+# 规则：保护已有代码块（```...```）和行内代码（`...`）不动；对其余文本中
+# 的裸英文术语自动包反引号。相邻术语（仅由一个空格连接）合并成一个反引号
+# 块，避免 `Hit` `Rate@5` 这种拆碎的渲染。
+_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+# 英文术语 token：字母开头，可含字母数字及 -_.@ 分隔的延续段，如 BM25、top-K、Rate@5、enable.auto.commit
+_TERM_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:[-_.@][A-Za-z0-9]+)*")
+
+
+def _is_english_term(token: str) -> bool:
+    """判断一个 token 是否值得包反引号：长度>=2 或含数字。
+    避免把单个字母（如「方案 A」「Q 和 A」）误包。"""
+    return len(token) >= 2 or any(c.isdigit() for c in token)
+
+
+def _auto_backtick_english(text: str) -> str:
+    """给答案里的裸英文术语自动包反引号，已有代码块/行内代码不受影响。"""
+    if not text:
+        return text
+
+    # 1. 先把已有代码块和行内代码占位保护起来，避免内部内容被重复处理
+    placeholders: list[str] = []
+
+    def _save(m: re.Match) -> str:
+        placeholders.append(m.group(0))
+        return f"\x00{len(placeholders) - 1}\x00"
+
+    text = _CODE_BLOCK_RE.sub(_save, text)
+    text = _INLINE_CODE_RE.sub(_save, text)
+
+    # 2. 找出所有术语匹配，过滤掉单字母非术语
+    term_matches = [m for m in _TERM_RE.finditer(text) if _is_english_term(m.group(0))]
+    if not term_matches:
+        # 还原占位后返回
+        return re.sub(r"\x00(\d+)\x00", lambda m: placeholders[int(m.group(1))], text)
+
+    # 3. 重写文本，相邻（恰好一个空格连接）的术语合并成一个反引号块
+    out: list[str] = []
+    pos = 0
+    i = 0
+    while i < len(term_matches):
+        m = term_matches[i]
+        out.append(text[pos:m.start()])
+        chunk = m.group(0)
+        end = m.end()
+        j = i + 1
+        while j < len(term_matches) and text[end:term_matches[j].start()] == " ":
+            chunk = chunk + " " + term_matches[j].group(0)
+            end = term_matches[j].end()
+            j += 1
+        out.append(f"`{chunk}`")
+        pos = end
+        i = j
+    out.append(text[pos:])
+    text = "".join(out)
+
+    # 4. 还原占位
+    text = re.sub(r"\x00(\d+)\x00", lambda m: placeholders[int(m.group(1))], text)
+    return text
 
 PARSE_SYSTEM_PROMPT = """你是一个面试题分析专家。用户会给你一段面试经历（面经），你需要：
 1. 仔细阅读面经内容，识别出每一道独立的面试题
@@ -15,16 +85,54 @@ PARSE_SYSTEM_PROMPT = """你是一个面试题分析专家。用户会给你一�
 注意事项：
 - 如果面经中有"几道题"、"多个问题"等模糊描述，请尽量还原具体问题
 - 如果面经中提到"系统设计"、"架构设计"等，请展开为具体的设计问题
-- 参考答案要用清晰的分点方式回答，便于阅读
-- 不要使用 Markdown 表格，保持文本格式
-- 每道题的参考答案应该包含核心思路和关键要点
+- 每道题的参考答案应该包含核心思路和关键要点，每题答案控制在 4-6 个要点，不要过长
+- **题量上限**：最多解析 15 道题。如果面经中题目超过 15 道，只取前 15 道最有代表性的，其余忽略。这样可避免输出过长导致超时。
+
+## 答案排版铁律（必须严格遵守，渲染后以 Markdown 展示）
+答案必须是**规范的 Markdown**。严格遵守以下规则：
+
+铁律 1【分层只用二级标题】：每一个大要点以 `##` 开头作为标题，例如 `## 1. 解决检索粒度矛盾`。标题前后各空一行（换行写成 `\\n\\n`）。
+
+铁律 2【子要点用列表，每项一行】：标题下的子要点用 `-` 列表，**每个 `-` 单独占一行**（写作 `\\n- 要点`），列表前后各空一行。
+
+铁律 3【禁止数字堆叠】：**禁止** `1.1`、`1.2`、`2.1` 这类把子编号塞进同一段落正文的写法，子要点一律用铁律 2 的 `-` 列表。
+
+铁律 4【英文术语必须加反引号】：中文句子里出现的**任何英文单词、缩写、配置项、函数名、参数名、命令**，用反引号包成行内代码，例如 `Minor GC`、`SO_SNDBUF`、`accept()`、`enable.auto.commit`。含英文字母就加反引号。
+
+铁律 5【不要用粗体包英文术语】：英文术语用反引号（铁律 4），不要用 `**粗体**` 包裹。粗体仅用于强调少数中文关键词。禁止 `**中文（english）**` 这种整体粗体写法。
+
+铁律 6【段落空行分隔】：段落与段落、段落与列表之间空一行（`\\n\\n`），不要连成一坨。
+
+铁律 7【多行代码用代码块】：配置或代码示例用带语言标识的代码块，例如：
+```bash
+net.ipv4.tcp_max_syn_backlog = 8192
+```
+
+铁律 8【不要用表格】。
+
+## ✅ 答案格式示例（只学格式，不抄内容）
+## 1. 父子索引的核心思路
+
+- 索引阶段用小块（子块）做精确匹配，命中后将对应的大块（父块）作为上下文返回给 `LLM`。
+- 小块提高向量检索的精度，父块补充完整语义，使生成结果更连贯。
+
+**实现方式**：固定窗口切分（如 `200 token` 子块 / `500 token` 父块），或按段落、标题层级构建父子映射。
+
+## 输出格式（极其重要，违反会导致解析失败）
+你必须返回一个 JSON 数组。JSON 中字符串值（question / answer）里**严禁出现未转义的英文双引号 `"`**，否则 JSON 会解析失败。具体要求：
+- 答案中如需引用术语、专有名词或强调，一律使用中文引号「」或『』，**不要用英文双引号 `"`**。
+  - 正确：术语「Lost in the Middle」、指令「忽略之前的指令」
+  - 错误：术语"Lost in the Middle"（这会破坏 JSON）
+- 答案中的换行必须写成 `\\n` 转义序列，不要直接换行。
+- 不要在 JSON 外面包 Markdown 代码块，直接输出 JSON 数组本身。
+- 一次输出全部题目，不要中途截断。
 
 请严格按照以下 JSON 格式返回，不要返回任何其他内容：
 [
   {
     "question": "面试题内容（完整表述）",
     "difficulty": "简单/中等/困难",
-    "answer": "参考答案（用数字列表格式，如：1. 第一点\\n2. 第二点\\n3. 第三点）"
+    "answer": "参考答案（规范 Markdown，换行用 \\n 转义）"
   }
 ]"""
 
@@ -353,7 +461,13 @@ EVALUATION_PROMPT = """你是一位资深面试评估专家。你需要根据候
 - detailed_feedback 使用 Markdown 格式，结构清晰"""
 
 
-async def call_minimax(messages: list[dict]) -> str:
+async def call_minimax(messages: list[dict], timeout: float = 180.0) -> str:
+    """调用 MiniMax 对话接口，带自动重试。
+
+    timeout 默认 180s：生成型任务（如解析面经，需要为每道题生成参考答案、
+    输出 token 量大）耗时长，120s 容易 ReadTimeout。生成型长任务可进一步
+    传入更大的 timeout。
+    """
     url = f"{settings.MINIMAX_BASE_URL}/text/chatcompletion_v2"
     headers = {
         "Authorization": f"Bearer {settings.MINIMAX_API_KEY}",
@@ -363,30 +477,83 @@ async def call_minimax(messages: list[dict]) -> str:
         "model": "MiniMax-M3",
         "messages": messages,
         "temperature": 0.7,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
     }
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        data = response.json()
+    # MiniMax 偶发会返回 429（限流）或 5xx，这类瞬时错误重试通常即可成功。
+    # 对它们做带退避的自动重试，避免把瞬时抖动直接抛给用户变成 500。
+    max_retries = 3
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, headers=headers, json=payload)
 
-        choices = data.get("choices")
-        if not choices or not isinstance(choices, list):
-            logger.error(f"MiniMax API returned unexpected response: {json.dumps(data, ensure_ascii=False)[:500]}")
-            raise ValueError(f"MiniMax API 返回了异常的响应格式，choices 为空或不存在")
+                # 把 HTTP 错误转成带状态码+响应体的可读异常，避免空消息
+                if response.status_code >= 400:
+                    body = ""
+                    try:
+                        body = response.text
+                    except Exception:
+                        pass
+                    logger.error(
+                        "MiniMax API returned HTTP %s: %s",
+                        response.status_code,
+                        body[:500],
+                    )
+                    err = RuntimeError(
+                        f"MiniMax API 返回 HTTP {response.status_code}"
+                        + (f": {body[:200]}" if body else "")
+                    )
+                    # 429 / 5xx 才重试，4xx（除 429）是请求本身的问题，重试无用
+                    if response.status_code == 429 or response.status_code >= 500:
+                        last_exc = err
+                        if attempt < max_retries - 1:
+                            # 退避：1s, 2s
+                            await _sleep(1.0 * (2 ** attempt))
+                            continue
+                    raise err
 
-        message = choices[0].get("message")
-        if not message or not isinstance(message, dict):
-            logger.error(f"MiniMax API returned unexpected choice: {json.dumps(choices[0], ensure_ascii=False)[:500]}")
-            raise ValueError(f"MiniMax API 返回的消息为空")
+                data = response.json()
 
-        content = message.get("content")
-        if not content or not isinstance(content, str):
-            logger.error(f"MiniMax API returned empty content in message: {json.dumps(message, ensure_ascii=False)[:500]}")
-            raise ValueError(f"MiniMax API 返回的内容为空")
+                choices = data.get("choices")
+                if not choices or not isinstance(choices, list):
+                    logger.error(f"MiniMax API returned unexpected response: {json.dumps(data, ensure_ascii=False)[:500]}")
+                    raise ValueError(f"MiniMax API 返回了异常的响应格式，choices 为空或不存在")
 
-        return content
+                message = choices[0].get("message")
+                if not message or not isinstance(message, dict):
+                    logger.error(f"MiniMax API returned unexpected choice: {json.dumps(choices[0], ensure_ascii=False)[:500]}")
+                    raise ValueError(f"MiniMax API 返回的消息为空")
+
+                content = message.get("content")
+                if not content or not isinstance(content, str):
+                    logger.error(f"MiniMax API returned empty content in message: {json.dumps(message, ensure_ascii=False)[:500]}")
+                    raise ValueError(f"MiniMax API 返回的内容为空")
+
+                return content
+        except httpx.TimeoutException as e:
+            # 超时通常是生成耗时过长（题量大、输出长），不是网络故障。
+            # 重试时给更长退避，并标注是超时，便于上层给出针对性提示。
+            last_exc = RuntimeError(
+                f"调用 MiniMax 超时（{type(e).__name__}）：模型响应时间过长，可能是题量过大，请精简面经后重试"
+            )
+            logger.error(f"MiniMax timeout (attempt {attempt + 1}/{max_retries}): {type(e).__name__}")
+            if attempt < max_retries - 1:
+                await _sleep(2.0 * (2 ** attempt))
+                continue
+            raise last_exc
+        except httpx.HTTPError as e:
+            # 其他网络层错误（连接中断等）
+            last_exc = RuntimeError(f"调用 MiniMax 网络错误: {type(e).__name__}: {e}")
+            logger.error(f"MiniMax HTTP transport error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                await _sleep(1.0 * (2 ** attempt))
+                continue
+            raise last_exc
+
+    # 重试用尽
+    raise last_exc or RuntimeError("MiniMax API 调用失败")
 
 
 def _clean_json_response(result: str) -> str:
@@ -403,52 +570,82 @@ def _clean_json_response(result: str) -> str:
 
 def _repair_json_string_literals(text: str) -> str:
     """Best-effort repair of LLM JSON that contains unescaped control chars
-    inside string values.
+    or unescaped double quotes inside string values.
 
     LLMs frequently emit real newlines/tabs inside JSON string values instead
-    of the escaped ``\\n`` / ``\\t`` sequences, which makes ``json.loads`` fail
-    with errors like "Expecting ',' delimiter". We walk the text char by char
-    tracking whether we are inside a string and escape any control character
-    that appears inside a string literal. We also leave already-escaped
-    sequences (``\\n`` etc.) untouched.
+    of the escaped ``\\n`` / ``\\t`` sequences, and — more perniciously — emit
+    raw ``"`` inside an answer (e.g. 术语"Lost in the Middle") which breaks the
+    JSON structure with "Expecting ',' delimiter" / "Unterminated string".
+
+    We walk the text char by char tracking whether we are inside a string.
+    Inside a string:
+    - real newlines/tabs/CR are escaped to ``\\n`` / ``\\t`` / ``\\r``;
+    - already-escaped sequences (``\\n`` etc.) are left untouched;
+    - a ``"`` that does NOT look like the closing quote of the string is
+      escaped to ``\\"``. We decide "closing quote" heuristically: a ``"`` is
+      treated as closing only if it is followed (after optional whitespace) by
+      one of `,` `}` `]` `:` or end-of-text — i.e. a character that can
+      legitimately follow a string value in JSON. Any other ``"`` inside the
+      string is escaped.
     """
     out = []
     in_string = False
     escaped = False
-    for ch in text:
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
         if not in_string:
             out.append(ch)
             if ch == '"':
                 in_string = True
+            i += 1
             continue
 
         if escaped:
             # Previous char was a backslash: pass this one through verbatim.
             out.append(ch)
             escaped = False
+            i += 1
             continue
 
         if ch == "\\":
             out.append(ch)
             escaped = True
+            i += 1
             continue
 
         if ch == '"':
-            out.append(ch)
-            in_string = False
+            # Decide whether this quote closes the string. It closes only if
+            # the next non-whitespace char is one of , } ] : or end-of-text.
+            j = i + 1
+            while j < n and text[j] in " \t\r\n":
+                j += 1
+            nxt = text[j] if j < n else ""
+            if nxt in (",", "}", "]", ":") or nxt == "":
+                out.append(ch)
+                in_string = False
+            else:
+                # An unescaped " inside the string value — escape it.
+                out.append('\\"')
+            i += 1
             continue
 
         if ch == "\n":
             out.append("\\n")
+            i += 1
             continue
         if ch == "\r":
             out.append("\\r")
+            i += 1
             continue
         if ch == "\t":
             out.append("\\t")
+            i += 1
             continue
 
         out.append(ch)
+        i += 1
     return "".join(out)
 
 
@@ -469,6 +666,21 @@ def _safe_json_loads(text: str) -> object:
             raise original_err
 
 
+def _normalize_parsed_questions(parsed: object) -> list[dict]:
+    """把解析结果规整为 list[dict]，补齐缺失字段。"""
+    if not isinstance(parsed, list):
+        parsed = [parsed]
+    for item in parsed:
+        if isinstance(item, dict):
+            item.setdefault("question", "")
+            item.setdefault("difficulty", "中等")
+            item.setdefault("answer", "")
+            # 模型对「英文术语加反引号」执行不稳定，这里统一兜底，保证渲染一致
+            if isinstance(item.get("answer"), str):
+                item["answer"] = _auto_backtick_english(item["answer"])
+    return [q for q in parsed if isinstance(q, dict) and q.get("question")]
+
+
 async def parse_interview(content: str, company: str) -> list[dict]:
     user_message = f"公司：{company}\n\n面经内容：\n{content}" if company else f"面经内容：\n{content}"
 
@@ -477,20 +689,35 @@ async def parse_interview(content: str, company: str) -> list[dict]:
         {"role": "user", "content": user_message},
     ]
 
+    # 解析面经是生成型长任务：要为每道题生成参考答案，输出 token 量大、
+    # 耗时长。给 300s 超时，避免题量稍大就 ReadTimeout。
+    result = ""
     try:
-        result = await call_minimax(messages)
+        result = await call_minimax(messages, timeout=300.0)
         cleaned = _clean_json_response(result)
+        try:
+            parsed = _safe_json_loads(cleaned)
+        except json.JSONDecodeError as e:
+            # 第一次解析失败（通常是答案里混入了未转义双引号或控制字符）。
+            # 让模型基于上次输出自我纠正，重新输出严格合法的 JSON，再试一次。
+            logger.warning(f"First parse_interview parse failed ({e}); retrying with strict-JSON prompt.")
+            retry_messages = messages + [
+                {"role": "assistant", "content": result},
+                {
+                    "role": "user",
+                    "content": (
+                        "你上一次返回的内容不是合法的 JSON，解析失败。常见原因：answer 字符串值里"
+                        "出现了未转义的英文双引号 \\\", 或出现了真实换行。请严格只输出一个合法的 "
+                        "JSON 数组：不要使用 Markdown 代码块；answer 中如需引用术语一律用中文引号"
+                        "「」而不要用英文双引号；所有换行用 \\n 转义；引号用 \\\" 转义。"
+                    ),
+                },
+            ]
+            result = await call_minimax(retry_messages, timeout=300.0)
+            cleaned = _clean_json_response(result)
+            parsed = _safe_json_loads(cleaned)
 
-        parsed = _safe_json_loads(cleaned)
-        if not isinstance(parsed, list):
-            parsed = [parsed]
-
-        for item in parsed:
-            item.setdefault("question", "")
-            item.setdefault("difficulty", "中等")
-            item.setdefault("answer", "")
-
-        valid_questions = [q for q in parsed if q.get("question")]
+        valid_questions = _normalize_parsed_questions(parsed)
         if not valid_questions:
             raise ValueError("未能从面经中提取到有效题目，请确保面经内容包含面试问题")
 
@@ -669,19 +896,138 @@ async def interview_chat(
         raise
 
 
-async def generate_question_answer(question: str) -> str:
-    """为一道面试题生成参考答案。"""
+SKIPPED_QUESTION_PROMPT = """你是一个资深技术面试官与题库编辑。用户会给你一段模拟面试中面试官的发言，其中可能包含"好的""嗯""那么接下来下一个问题""我们来看看"等口语化过渡语，以及对候选人上一轮回答的评价。你需要从中提炼出一道干净的面试题，并生成参考答案。
+
+## 任务一：提炼题目
+去除所有口语化过渡语和评价性话语，只保留问题本身。表述要完整、独立、清晰，不依赖上下文也能看懂。多个问题只保留最主要的一个。
+
+## 任务二：生成参考答案
+答案必须是**规范的 Markdown**，渲染后展示。请严格遵守以下排版铁律（违反任何一条都会导致显示混乱）：
+
+铁律 1【分层只用二级标题】：每一个大要点必须以 `##` 开头作为标题，例如 `## 1. 三次握手阶段`。标题前后各空一行。
+
+铁律 2【子要点用列表，每项一行】：标题下的子要点用 `-` 列表呈现，**每个 `-` 必须单独占一行**，列表前后各空一行。
+
+铁律 3【禁止数字堆叠】：**绝对禁止**使用 `4.1`、`4.2`、`2.1` 这类把子编号塞进同一段落正文里的写法。子要点一律用铁律 2 的 `-` 列表，不要给子要点编号。
+
+铁律 4【英文术语必须加反引号】：中文句子里出现的**任何英文单词、缩写、配置项、函数名、参数名、命令、路径**，都必须用反引号包成行内代码。例如写 `Minor GC`、`age`、`mark word`、`SO_SNDBUF`、`accept()`、`enable.auto.commit`、`/proc/net/snmp`，而不是裸写。判断标准：只要含英文字母，就加反引号。
+
+铁律 5【不要用粗体包英文术语】：英文术语用反引号（铁律 4），不要用 `**粗体**` 包裹。粗体仅用于强调少数中文关键词，且不要滥用。特别禁止 `**中文（english）**` 这种把中英文整体粗体的写法。
+
+铁律 6【段落空行分隔】：段落与段落、段落与列表之间必须空一行，不要连成一坨。
+
+铁律 7【多行代码用代码块】：配置或代码示例用带语言标识的代码块：
+```bash
+net.ipv4.tcp_max_syn_backlog = 8192
+```
+
+铁律 8【不要用表格】。
+
+## ✅ 正确示例（只学格式，不抄内容）
+## 1. 对象晋升老年代的时机
+
+- JVM 通过对象的 `age` 字段记录它经历 `Minor GC` 的次数，对象头中有 4 bit 的 `mark word` 区域用于记录 `age`。
+- 每经历一次 `Minor GC`，存活对象的 `age` 加 1。
+
+**年龄阈值判断**：当 `age` 达到阈值时晋升，阈值由 `-XX:MaxTenuringThreshold` 控制。
+
+## ❌ 错误示例（禁止这样写）
+4. 对象晋升老年代的时机与阈值
+JVM 通过对象的**年龄（age）**字段记录它经历 Minor GC 的次数。
+4.1 年龄阈值判断（年龄到了就晋升）
+每经历一次 Minor GC，存活对象的 age 加 1。
+
+## 输出格式
+严格按以下格式输出，不要输出任何其他内容，不要在整体输出外面包 Markdown 代码块：
+
+===题目===
+<提炼后的干净题目>
+
+===答案===
+<参考答案，规范 Markdown>
+
+注意：题目和答案内容中请勿出现"===题目==="或"===答案==="这样的标记字符串。"""
+
+
+def _strip_outer_code_fence(text: str) -> str:
+    """Strip a code fence that wraps the *entire* output.
+
+    Only removes a leading ```` ``` ```` (with optional language tag) and a
+    matching trailing ```` ``` ```` when both are present — i.e. the model
+    wrapped the whole response in a fence. This is careful NOT to touch a
+    trailing ```` ``` ```` that actually closes a code block *inside* the
+    answer (which would corrupt it), which ``_clean_json_response`` would do
+    blindly.
+    """
+    cleaned = text.strip()
+    if not cleaned.startswith("```"):
+        return cleaned
+    # Drop the opening fence line (``` or ```lang).
+    first_newline = cleaned.find("\n")
+    if first_newline == -1:
+        return cleaned
+    inner = cleaned[first_newline + 1:]
+    # Only strip a trailing fence if one is actually there.
+    if inner.rstrip().endswith("```"):
+        inner = inner.rstrip()
+        inner = inner[:-3].rstrip()
+    return inner
+
+
+def _parse_skipped_question_response(result: str, raw_question: str) -> dict:
+    """从模型返回中解析题目与答案。
+
+    采用 ``===题目===`` / ``===答案===`` 分隔符格式而非 JSON，因为参考答案
+    中常含有未转义的双引号、换行等字符，JSON 在这种情况下极易解析失败。
+    分隔符格式对答案正文里的引号、代码、换行都不敏感，鲁棒性远好于 JSON。
+
+    解析失败时回退：题目用原始发言，答案留空，保证题目不丢。
+    """
+    cleaned = _strip_outer_code_fence(result).strip()
+
+    q_marker = "===题目==="
+    a_marker = "===答案==="
+
+    q_idx = cleaned.find(q_marker)
+    a_idx = cleaned.find(a_marker)
+
+    if q_idx != -1 and a_idx != -1 and q_idx < a_idx:
+        question = cleaned[q_idx + len(q_marker):a_idx].strip()
+        answer = cleaned[a_idx + len(a_marker):].strip()
+        if question:
+            return {"question": question, "answer": answer}
+
+    # 回退：模型未按格式输出，至少保留原始题目，不丢题
+    logger.warning(
+        "Skipped-question response did not contain expected markers; "
+        "falling back to raw question. response: %s",
+        result[:300],
+    )
+    return {"question": raw_question.strip(), "answer": ""}
+
+
+async def generate_question_answer(question: str) -> dict:
+    """从面试官发言中提炼干净题目，并生成参考答案。
+
+    面试官在模拟面试中的原始发言常带有"好的，那么接下来下一个问题"等口语
+    过渡语，直接入库会导致题目表述冗长、不规范。本函数让模型提炼干净的
+    题目并给出参考答案。
+
+    返回 {"question", "answer"}。采用分隔符格式输出，规避 JSON 未转义
+    双引号导致的解析失败。
+    """
     messages = [
-        {
-            "role": "system",
-            "content": "你是一个资深技术面试官。请为以下面试题生成一份详细、有条理的参考答案。使用清晰的分点方式回答，便于阅读。不要使用 Markdown 表格。",
-        },
-        {"role": "user", "content": f"请为这道面试题生成参考答案：\n{question}"},
+        {"role": "system", "content": SKIPPED_QUESTION_PROMPT},
+        {"role": "user", "content": f"面试官发言：\n{question}"},
     ]
 
     try:
         result = await call_minimax(messages)
-        return result.strip()
+        parsed = _parse_skipped_question_response(result, question)
+        # 与解析面经保持一致：后处理统一给裸英文术语包反引号
+        if parsed.get("answer"):
+            parsed["answer"] = _auto_backtick_english(parsed["answer"])
+        return parsed
     except Exception as e:
         logger.error(f"Error generating answer for question: {e}")
         raise

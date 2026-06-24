@@ -57,15 +57,26 @@ function AppContent() {
           <QuestionsPage />
         ) : activeTab === 'parse' ? (
           <ParsePage />
-        ) : activeTab === 'mock-interview' ? (
-          <MockInterviewPage />
         ) : activeTab === 'resume-analyze' ? (
           <ResumeAnalyzePage />
         ) : activeTab === 'resume-review' ? (
           <ResumeReviewPage />
-        ) : (
+        ) : activeTab === 'progress' ? (
           <ProgressPage />
-        )}
+        ) : null}
+        {/* 模拟面试页保持常驻挂载：切换其他 tab 时不卸载，避免面试进行中 /
+            评估结果 / 跳过题目入库等异步流程与页面状态丢失。仅在激活时显示。
+            刷新页面会重置整个 app，符合「刷新才重新开始」的预期。 */}
+        <div
+          style={{
+            display: activeTab === 'mock-interview' ? 'flex' : 'none',
+            flex: 1,
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <MockInterviewPage />
+        </div>
       </Layout>
       {showAuth && <AuthPage onClose={() => setShowAuth(false)} />}
     </>

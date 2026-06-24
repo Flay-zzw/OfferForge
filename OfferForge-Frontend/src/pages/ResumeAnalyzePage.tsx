@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Loader2, Sparkles, Upload, FileText, X, File, Image, FileSpreadsheet, AlertCircle, Target, BookOpen, ChevronRight } from 'lucide-react';
 import { api } from '../api';
+import Markdown from '../components/Markdown';
 import type { ResumeAnalyzeResponse } from '../types';
 
 const ACCEPTED_TYPES = '.pdf,.docx,.doc,.png,.jpg,.jpeg,.bmp,.tiff,.tif,.webp';
@@ -189,7 +190,9 @@ export default function ResumeAnalyzePage() {
                 <BookOpen size={20} color="var(--accent-primary)" />
                 <h3 style={styles.analysisTitle}>整体分析</h3>
               </div>
-              <p style={styles.analysisText}>{result.overall_analysis}</p>
+              <div style={styles.analysisText}>
+                <Markdown>{result.overall_analysis}</Markdown>
+              </div>
             </div>
 
             {/* Predicted questions */}
@@ -454,11 +457,7 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
   },
   analysisText: {
-    fontSize: 14,
-    lineHeight: 1.8,
-    color: 'var(--text-secondary)',
     margin: 0,
-    whiteSpace: 'pre-wrap',
   },
   questionsTitle: {
     display: 'flex',
